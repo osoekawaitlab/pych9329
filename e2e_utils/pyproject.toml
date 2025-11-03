@@ -1,0 +1,19 @@
+[project]
+name = "e2e-utils"
+version = "0.0.0"
+requires-python = ">=3.10"
+description = "End-to-end test utilities for pych9329."
+dependencies = [
+    "hid-interceptor",
+    "hid-recorder",
+    "pydantic>=2.12.3",
+    "python-ulid[pydantic]>=3.1.0",
+]
+
+[build-system]
+requires = ["setuptools>=70.1"]
+build-backend = "setuptools.build_meta"
+
+[tool.uv.sources]
+hid-interceptor = { git = "https://github.com/osoekawaitlab/hid-interceptor" }
+hid-recorder = { git = "https://github.com/osoekawaitlab/hid-recorder" }
