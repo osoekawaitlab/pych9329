@@ -21,7 +21,14 @@ Context manager usage:
 from pych9329.adapter import CommunicationAdapter, SerialAdapter
 from pych9329.driver import CH9329Driver
 from pych9329.exceptions import Pych9329Error, UnsupportedEvdevCodeError
-from pych9329.models import KeyboardState, KeyCode, MediaKey, ModifierKey, MouseButton
+from pych9329.models import (
+    KeyboardInput,
+    KeyCode,
+    MediaKey,
+    ModifierKey,
+    MouseButton,
+    MouseInput,
+)
 from pych9329.recorder import (
     DelayOperation,
     KeyDownOperation,
@@ -47,7 +54,7 @@ __all__ = [
     "KeyCode",
     "KeyDownOperation",
     "KeyUpOperation",
-    "KeyboardState",
+    "KeyboardInput",
     "MediaKey",
     "MediaKeyDownOperation",
     "MediaKeyUpOperation",
@@ -55,6 +62,7 @@ __all__ = [
     "MouseButton",
     "MouseButtonDownOperation",
     "MouseButtonUpOperation",
+    "MouseInput",
     "MouseMoveAbsoluteOperation",
     "MouseMoveRelativeOperation",
     "MouseScrollOperation",

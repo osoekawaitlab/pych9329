@@ -6,10 +6,10 @@ mouse buttons, media keys, and character-to-keycode mappings.
 All key and button codes follow the Linux evdev naming convention.
 """
 
-from dataclasses import dataclass, field
 from enum import Enum
 
 from evdev import ecodes
+from pydantic import BaseModel, Field
 
 MAX_ROLLOVER_KEYS = 6
 
@@ -220,8 +220,14 @@ def get_key_mapping(char: str) -> tuple[int, int]:
     return _CHARACTER_MAP[char]
 
 
-@dataclass
-class KeyboardState:
+class BaseCh9329Model(BaseModel):
+    """Base model for CH9329 input models.
+
+    Configured to use enum values directly during serialization.
+    """
+
+
+class KeyboardInput(BaseCh9329Model):
     """Represents the complete state of keyboard input for CH9329.
 
     This model directly corresponds to the USB HID keyboard packet structure,
@@ -236,31 +242,61 @@ class KeyboardState:
 
     Examples:
         >>> # Single key with modifiers
-        >>> state = KeyboardState(
+        >>> state = KeyboardInput(
         ...     modifiers={ModifierKey.KEY_LEFTCTRL, ModifierKey.KEY_LEFTSHIFT},
         ...     keys=[KeyCode.KEY_A]
         ... )
         >>> # Multiple keys pressed simultaneously
-        >>> state = KeyboardState(
+        >>> state = KeyboardInput(
         ...     modifiers={ModifierKey.KEY_LEFTSHIFT},
         ...     keys=[KeyCode.KEY_A, KeyCode.KEY_B, KeyCode.KEY_C]
         ... )
         >>> # Maximum 6 keys
-        >>> state = KeyboardState(
+        >>> state = KeyboardInput(
         ...     keys=[KeyCode.KEY_A, KeyCode.KEY_B, KeyCode.KEY_C,
         ...           KeyCode.KEY_D, KeyCode.KEY_E, KeyCode.KEY_F]
         ... )
     """
 
-    modifiers: set[ModifierKey] = field(default_factory=set)
-    keys: list[KeyCode] = field(default_factory=list)
+    modifiers: set[ModifierKey] = Field(default_factory=set)
+    keys: list[KeyCode] = Field(default_factory=list, max_items=MAX_ROLLOVER_KEYS)
 
-    def __post_init__(self) -> None:
-        """Validate keyboard state constraints.
 
-        Raises:
-            ValueError: If more than 6 keys are provided.
-        """
-        if len(self.keys) > MAX_ROLLOVER_KEYS:
-            msg = f"Maximum {MAX_ROLLOVER_KEYS} keys allowed, got {len(self.keys)}"
-            raise ValueError(msg)
+class MouseInput(BaseCh9329Model):
+    """Represents the complete state of mouse input for CH9329.
+
+    This model corresponds to the USB HID mouse relative movement packet,
+    which supports multiple simultaneous button presses, relative movement,
+    and scroll wheel input.
+
+    Args:
+        buttons: Set of mouse buttons currently pressed.
+        x: Relative X movement (-128 to 127).
+        y: Relative Y movement (-128 to 127).
+        scroll: Scroll wheel movement (-127 to 127).
+
+    Raises:
+        ValueError: If movement or scroll values are out of range.
+
+    Examples:
+        >>> # Move right and down
+        >>> state = MouseInput(x=10, y=10)
+        >>> # Left button pressed while moving
+        >>> state = MouseInput(
+        ...     buttons={MouseButton.BTN_LEFT},
+        ...     x=5,
+        ...     y=-5
+        ... )
+        >>> # Multiple buttons with scroll
+        >>> state = MouseInput(
+        ...     buttons={MouseButton.BTN_LEFT, MouseButton.BTN_RIGHT},
+        ...     scroll=3
+        ... )
+        >>> # Release all buttons (no movement)
+        >>> state = MouseInput()
+    """
+
+    buttons: set[MouseButton] = Field(default_factory=set)
+    x: int = Field(default=0, ge=-128, le=127)
+    y: int = Field(default=0, ge=-128, le=127)
+    scroll: int = Field(default=0, ge=-127, le=127)

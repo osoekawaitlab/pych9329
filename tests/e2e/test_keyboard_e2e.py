@@ -23,14 +23,14 @@ def test_keyboard_input_events_many_keys(
     capture_session = input_capture_session_manager.start_session(
         name="keyboard_input_events_many_keys"
     )
-    state_1 = pych9329.KeyboardState(
+    state_1 = pych9329.KeyboardInput(
         keys=[
             pych9329.KeyCode.KEY_A,
             pych9329.KeyCode.KEY_B,
             pych9329.KeyCode.KEY_C,
         ]
     )
-    state_2 = pych9329.KeyboardState(
+    state_2 = pych9329.KeyboardInput(
         keys=[
             pych9329.KeyCode.KEY_A,
             pych9329.KeyCode.KEY_B,
@@ -40,7 +40,7 @@ def test_keyboard_input_events_many_keys(
             pych9329.KeyCode.KEY_F,
         ]
     )
-    state_3 = pych9329.KeyboardState(
+    state_3 = pych9329.KeyboardInput(
         keys=[
             pych9329.KeyCode.KEY_B,
             pych9329.KeyCode.KEY_D,
@@ -51,7 +51,7 @@ def test_keyboard_input_events_many_keys(
         driver = pych9329.CH9329Driver(serial_adapter)
         for state in (state_1, state_2, state_3):
             driver.send_keyboard_state(state)
-        driver.send_keyboard_state(pych9329.KeyboardState())
+        driver.send_keyboard_state(pych9329.KeyboardInput())
     expected_codes_and_values = [
         (pych9329.KeyCode.KEY_A.name, 1),
         (pych9329.KeyCode.KEY_B.name, 1),
@@ -79,11 +79,11 @@ def test_keyboard_input_events_modifiers(
     capture_session = input_capture_session_manager.start_session(
         name="keyboard_input_events_modifiers"
     )
-    state_1 = pych9329.KeyboardState(
+    state_1 = pych9329.KeyboardInput(
         modifiers={pych9329.ModifierKey.KEY_LEFTCTRL},
         keys=[pych9329.KeyCode.KEY_A],
     )
-    state_2 = pych9329.KeyboardState(
+    state_2 = pych9329.KeyboardInput(
         modifiers={
             pych9329.ModifierKey.KEY_LEFTCTRL,
             pych9329.ModifierKey.KEY_LEFTSHIFT,
@@ -94,7 +94,7 @@ def test_keyboard_input_events_modifiers(
         driver = pych9329.CH9329Driver(serial_adapter)
         for state in (state_1, state_2):
             driver.send_keyboard_state(state)
-        driver.send_keyboard_state(pych9329.KeyboardState())
+        driver.send_keyboard_state(pych9329.KeyboardInput())
     expected_codes_and_values = [
         (pych9329.ModifierKey.KEY_LEFTCTRL.name, 1),
         (pych9329.KeyCode.KEY_A.name, 1),
@@ -119,12 +119,12 @@ def test_keyboard_input_modifier_key_each(
     with capture_session, pych9329.SerialAdapter(port="/dev/ttyUSB0") as serial_adapter:
         driver = pych9329.CH9329Driver(serial_adapter)
         for mod_key in pych9329.ModifierKey:
-            state = pych9329.KeyboardState(
+            state = pych9329.KeyboardInput(
                 modifiers={mod_key},
                 keys=[],
             )
             driver.send_keyboard_state(state)
-            driver.send_keyboard_state(pych9329.KeyboardState())
+            driver.send_keyboard_state(pych9329.KeyboardInput())
     expected_codes_and_values: list[tuple[str, int]] = []
     for mod_key in pych9329.ModifierKey:
         expected_codes_and_values.append((mod_key.name, 1))
@@ -145,11 +145,11 @@ def test_keyboard_input_all_keys(
     with capture_session, pych9329.SerialAdapter(port="/dev/ttyUSB0") as serial_adapter:
         driver = pych9329.CH9329Driver(serial_adapter)
         for key in pych9329.KeyCode:
-            state = pych9329.KeyboardState(
+            state = pych9329.KeyboardInput(
                 keys=[key],
             )
             driver.send_keyboard_state(state)
-            driver.send_keyboard_state(pych9329.KeyboardState())
+            driver.send_keyboard_state(pych9329.KeyboardInput())
     expected_codes_and_values: list[tuple[str, int]] = []
     for key in pych9329.KeyCode:
         expected_codes_and_values.append((key.name, 1))

@@ -2,8 +2,16 @@
 
 import pytest
 from evdev import ecodes
+from pydantic import ValidationError
 
-from pych9329.models import KeyboardState, KeyCode, MediaKey, ModifierKey, MouseButton
+from pych9329.models import (
+    KeyboardInput,
+    KeyCode,
+    MediaKey,
+    ModifierKey,
+    MouseButton,
+    MouseInput,
+)
 
 
 class TestMouseButton:
@@ -189,24 +197,24 @@ class TestMediaKey:
         assert MediaKey.PREV_TRACK.value == (0x02, 0x20, 0x00, 0x00)
 
 
-class TestKeyboardState:
-    """Tests for KeyboardState data model."""
+class TestKeyboardInput:
+    """Tests for KeyboardInput data model."""
 
     def test_empty_state(self) -> None:
         """Test creating an empty keyboard state."""
-        state = KeyboardState()
+        state = KeyboardInput()
         assert state.modifiers == set()
         assert state.keys == []
 
     def test_single_key(self) -> None:
         """Test creating state with single key."""
-        state = KeyboardState(keys=[KeyCode.KEY_A])
+        state = KeyboardInput(keys=[KeyCode.KEY_A])
         assert state.modifiers == set()
         assert state.keys == [KeyCode.KEY_A]
 
     def test_single_key_with_modifiers(self) -> None:
         """Test creating state with key and modifiers."""
-        state = KeyboardState(
+        state = KeyboardInput(
             modifiers={ModifierKey.KEY_LEFTCTRL, ModifierKey.KEY_LEFTSHIFT},
             keys=[KeyCode.KEY_A],
         )
@@ -218,13 +226,13 @@ class TestKeyboardState:
 
     def test_multiple_keys(self) -> None:
         """Test creating state with multiple keys."""
-        state = KeyboardState(keys=[KeyCode.KEY_A, KeyCode.KEY_B, KeyCode.KEY_C])
+        state = KeyboardInput(keys=[KeyCode.KEY_A, KeyCode.KEY_B, KeyCode.KEY_C])
         assert len(state.keys) == 3
         assert state.keys == [KeyCode.KEY_A, KeyCode.KEY_B, KeyCode.KEY_C]
 
     def test_maximum_six_keys(self) -> None:
         """Test creating state with exactly 6 keys."""
-        state = KeyboardState(
+        state = KeyboardInput(
             keys=[
                 KeyCode.KEY_A,
                 KeyCode.KEY_B,
@@ -237,9 +245,12 @@ class TestKeyboardState:
         assert len(state.keys) == 6
 
     def test_more_than_six_keys_raises_error(self) -> None:
-        """Test that more than 6 keys raises ValueError."""
-        with pytest.raises(ValueError, match="Maximum 6 keys allowed, got 7"):
-            KeyboardState(
+        """Test that more than 6 keys raises ValidationError."""
+        with pytest.raises(
+            ValidationError,
+            match=r".*List should have at most 6 items after validation, not 7.*",
+        ):
+            KeyboardInput(
                 keys=[
                     KeyCode.KEY_A,
                     KeyCode.KEY_B,
@@ -253,7 +264,7 @@ class TestKeyboardState:
 
     def test_all_modifiers(self) -> None:
         """Test creating state with all modifier keys."""
-        state = KeyboardState(
+        state = KeyboardInput(
             modifiers={
                 ModifierKey.KEY_LEFTCTRL,
                 ModifierKey.KEY_RIGHTCTRL,
@@ -266,3 +277,134 @@ class TestKeyboardState:
             }
         )
         assert len(state.modifiers) == 8
+
+
+class TestMouseInput:
+    """Tests for MouseInput data model."""
+
+    def test_empty_state(self) -> None:
+        """Test creating an empty mouse state."""
+        state = MouseInput()
+        assert state.buttons == set()
+        assert state.x == 0
+        assert state.y == 0
+        assert state.scroll == 0
+
+    def test_movement_only(self) -> None:
+        """Test creating state with only movement."""
+        state = MouseInput(x=10, y=-20)
+        assert state.buttons == set()
+        assert state.x == 10
+        assert state.y == -20
+        assert state.scroll == 0
+
+    def test_scroll_only(self) -> None:
+        """Test creating state with only scroll."""
+        state = MouseInput(scroll=5)
+        assert state.buttons == set()
+        assert state.x == 0
+        assert state.y == 0
+        assert state.scroll == 5
+
+    def test_single_button(self) -> None:
+        """Test creating state with single button."""
+        state = MouseInput(buttons={MouseButton.BTN_LEFT})
+        assert state.buttons == {MouseButton.BTN_LEFT}
+
+    def test_multiple_buttons(self) -> None:
+        """Test creating state with multiple buttons."""
+        state = MouseInput(buttons={MouseButton.BTN_LEFT, MouseButton.BTN_RIGHT})
+        assert len(state.buttons) == 2
+        assert state.buttons == {MouseButton.BTN_LEFT, MouseButton.BTN_RIGHT}
+
+    def test_button_with_movement(self) -> None:
+        """Test creating state with button and movement."""
+        state = MouseInput(buttons={MouseButton.BTN_LEFT}, x=5, y=-5)
+        assert state.buttons == {MouseButton.BTN_LEFT}
+        assert state.x == 5
+        assert state.y == -5
+
+    def test_all_parameters(self) -> None:
+        """Test creating state with all parameters."""
+        state = MouseInput(
+            buttons={MouseButton.BTN_LEFT, MouseButton.BTN_MIDDLE},
+            x=10,
+            y=-10,
+            scroll=3,
+        )
+        assert len(state.buttons) == 2
+        assert state.x == 10
+        assert state.y == -10
+        assert state.scroll == 3
+
+    def test_x_min_boundary(self) -> None:
+        """Test x movement at minimum boundary."""
+        state = MouseInput(x=-128)
+        assert state.x == -128
+
+    def test_x_max_boundary(self) -> None:
+        """Test x movement at maximum boundary."""
+        state = MouseInput(x=127)
+        assert state.x == 127
+
+    def test_x_below_min_raises_error(self) -> None:
+        """Test that x below minimum raises ValidationError."""
+        with pytest.raises(
+            ValidationError, match=r".*Input should be greater than or equal to -128.*"
+        ):
+            MouseInput(x=-129)
+
+    def test_x_above_max_raises_error(self) -> None:
+        """Test that x above maximum raises ValidationError."""
+        with pytest.raises(
+            ValidationError, match=r".*Input should be less than or equal to 127.*"
+        ):
+            MouseInput(x=128)
+
+    def test_y_min_boundary(self) -> None:
+        """Test y movement at minimum boundary."""
+        state = MouseInput(y=-128)
+        assert state.y == -128
+
+    def test_y_max_boundary(self) -> None:
+        """Test y movement at maximum boundary."""
+        state = MouseInput(y=127)
+        assert state.y == 127
+
+    def test_y_below_min_raises_error(self) -> None:
+        """Test that y below minimum raises ValidationError."""
+        with pytest.raises(
+            ValidationError, match=r".*Input should be greater than or equal to -128.*"
+        ):
+            MouseInput(y=-129)
+
+    def test_y_above_max_raises_error(self) -> None:
+        """Test that y above maximum raises ValidationError."""
+        with pytest.raises(
+            ValidationError, match=r".*Input should be less than or equal to 127.*"
+        ):
+            MouseInput(y=128)
+
+    def test_scroll_min_boundary(self) -> None:
+        """Test scroll at minimum boundary."""
+        state = MouseInput(scroll=-127)
+        assert state.scroll == -127
+
+    def test_scroll_max_boundary(self) -> None:
+        """Test scroll at maximum boundary."""
+        state = MouseInput(scroll=127)
+        assert state.scroll == 127
+
+    def test_scroll_below_min_raises_error(self) -> None:
+        """Test that scroll below minimum raises ValidationError."""
+        with pytest.raises(
+            ValidationError, match=r".*Input should be greater than or equal to -127.*"
+        ):
+            MouseInput(scroll=-128)
+
+    def test_scroll_above_max_raises_error(self) -> None:
+        """Test that scroll above maximum raises ValidationError."""
+        with pytest.raises(
+            ValidationError, match=r".*Input should be less than or equal to 127.*"
+        ):
+            MouseInput(scroll=128)

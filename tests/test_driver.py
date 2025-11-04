@@ -5,7 +5,14 @@ from unittest.mock import Mock
 import pytest
 
 from pych9329.driver import CH9329Driver
-from pych9329.models import KeyboardState, KeyCode, MediaKey, ModifierKey, MouseButton
+from pych9329.models import (
+    KeyboardInput,
+    KeyCode,
+    MediaKey,
+    ModifierKey,
+    MouseButton,
+    MouseInput,
+)
 
 
 class TestCH9329DriverInit:
@@ -465,7 +472,7 @@ class TestCH9329DriverBackwardCompatibility:
         assert mock_adapter.send.call_count == 2
 
 
-class TestCH9329DriverSendKeyboardState:
+class TestCH9329DriverSendKeyboardInput:
     """Tests for send_keyboard_state() low-level API."""
 
     def test_empty_state_releases_all_keys(self) -> None:
@@ -473,7 +480,7 @@ class TestCH9329DriverSendKeyboardState:
         mock_adapter = Mock()
         driver = CH9329Driver(mock_adapter)
 
-        driver.send_keyboard_state(KeyboardState())
+        driver.send_keyboard_state(KeyboardInput())
 
         # Should send one packet
         assert mock_adapter.send.call_count == 1
@@ -491,7 +498,7 @@ class TestCH9329DriverSendKeyboardState:
         mock_adapter = Mock()
         driver = CH9329Driver(mock_adapter)
 
-        state = KeyboardState(keys=[KeyCode.KEY_A])
+        state = KeyboardInput(keys=[KeyCode.KEY_A])
         driver.send_keyboard_state(state)
 
         packet = mock_adapter.send.call_args[0][0]
@@ -505,7 +512,7 @@ class TestCH9329DriverSendKeyboardState:
         mock_adapter = Mock()
         driver = CH9329Driver(mock_adapter)
 
-        state = KeyboardState(
+        state = KeyboardInput(
             modifiers={ModifierKey.KEY_LEFTCTRL, ModifierKey.KEY_LEFTSHIFT},
             keys=[KeyCode.KEY_A],
         )
@@ -521,7 +528,7 @@ class TestCH9329DriverSendKeyboardState:
         mock_adapter = Mock()
         driver = CH9329Driver(mock_adapter)
 
-        state = KeyboardState(keys=[KeyCode.KEY_A, KeyCode.KEY_B, KeyCode.KEY_C])
+        state = KeyboardInput(keys=[KeyCode.KEY_A, KeyCode.KEY_B, KeyCode.KEY_C])
         driver.send_keyboard_state(state)
 
         packet = mock_adapter.send.call_args[0][0]
@@ -539,7 +546,7 @@ class TestCH9329DriverSendKeyboardState:
         mock_adapter = Mock()
         driver = CH9329Driver(mock_adapter)
 
-        state = KeyboardState(
+        state = KeyboardInput(
             keys=[
                 KeyCode.KEY_A,
                 KeyCode.KEY_B,
@@ -565,7 +572,7 @@ class TestCH9329DriverSendKeyboardState:
         mock_adapter = Mock()
         driver = CH9329Driver(mock_adapter)
 
-        state = KeyboardState(
+        state = KeyboardInput(
             modifiers={
                 ModifierKey.KEY_LEFTCTRL,
                 ModifierKey.KEY_RIGHTCTRL,
@@ -581,3 +588,112 @@ class TestCH9329DriverSendKeyboardState:
 
         packet = mock_adapter.send.call_args[0][0]
         assert packet[5] == 0xFF  # All modifiers
+
+
+class TestCH9329DriverSendMouseInput:
+    """Tests for send_mouse_state() low-level API."""
+
+    def test_empty_state_no_movement(self) -> None:
+        """Test that empty state sends no buttons or movement."""
+        mock_adapter = Mock()
+        driver = CH9329Driver(mock_adapter)
+
+        driver.send_mouse_state(MouseInput())
+
+        # Should send one packet
+        assert mock_adapter.send.call_count == 1
+        packet = mock_adapter.send.call_args[0][0]
+
+        # Check packet structure for relative mouse packet
+        # [0x57, 0xAB, 0x00, 0x05, 0x05, 0x01, button, x, y, scroll, checksum]
+        assert len(packet) == 11
+        assert packet[0:6] == b"\x57\xab\x00\x05\x05\x01"
+        assert packet[6] == 0x00  # No buttons
+        assert packet[7] == 0x00  # X = 0
+        assert packet[8] == 0x00  # Y = 0
+        assert packet[9] == 0x00  # Scroll = 0
+
+    def test_movement_only(self) -> None:
+        """Test sending only movement."""
+        mock_adapter = Mock()
+        driver = CH9329Driver(mock_adapter)
+
+        state = MouseInput(x=10, y=-20)
+        driver.send_mouse_state(state)
+
+        packet = mock_adapter.send.call_args[0][0]
+        assert packet[6] == 0x00  # No buttons
+        assert packet[7] == 10  # X = 10
+        assert packet[8] == 0x100 - 20  # Y = -20 in two's complement
+
+    def test_single_button_no_movement(self) -> None:
+        """Test sending single button without movement."""
+        mock_adapter = Mock()
+        driver = CH9329Driver(mock_adapter)
+
+        state = MouseInput(buttons={MouseButton.BTN_LEFT})
+        driver.send_mouse_state(state)
+
+        packet = mock_adapter.send.call_args[0][0]
+        assert packet[6] == 0x01  # Left button (USB HID: 0x01)
+        assert packet[7] == 0x00  # X = 0
+        assert packet[8] == 0x00  # Y = 0
+
+    def test_multiple_buttons(self) -> None:
+        """Test sending multiple buttons."""
+        mock_adapter = Mock()
+        driver = CH9329Driver(mock_adapter)
+
+        state = MouseInput(buttons={MouseButton.BTN_LEFT, MouseButton.BTN_RIGHT})
+        driver.send_mouse_state(state)
+
+        packet = mock_adapter.send.call_args[0][0]
+        # Left (0x01) | Right (0x02) = 0x03
+        assert packet[6] == 0x03
+
+    def test_button_with_movement(self) -> None:
+        """Test sending button with movement."""
+        mock_adapter = Mock()
+        driver = CH9329Driver(mock_adapter)
+
+        state = MouseInput(buttons={MouseButton.BTN_LEFT}, x=5, y=-5)
+        driver.send_mouse_state(state)
+
+        packet = mock_adapter.send.call_args[0][0]
+        assert packet[6] == 0x01  # Left button
+        assert packet[7] == 5  # X = 5
+        assert packet[8] == 0x100 - 5  # Y = -5
+
+    def test_scroll_only(self) -> None:
+        """Test sending only scroll."""
+        mock_adapter = Mock()
+        driver = CH9329Driver(mock_adapter)
+
+        state = MouseInput(scroll=3)
+        driver.send_mouse_state(state)
+
+        packet = mock_adapter.send.call_args[0][0]
+        assert packet[6] == 0x00  # No buttons
+        assert packet[7] == 0x00  # X = 0
+        assert packet[8] == 0x00  # Y = 0
+        assert packet[9] == 3  # Scroll = 3
+
+    def test_all_parameters(self) -> None:
+        """Test sending all parameters."""
+        mock_adapter = Mock()
+        driver = CH9329Driver(mock_adapter)
+
+        state = MouseInput(
+            buttons={MouseButton.BTN_LEFT, MouseButton.BTN_MIDDLE},
+            x=10,
+            y=-10,
+            scroll=5,
+        )
+        driver.send_mouse_state(state)
+
+        packet = mock_adapter.send.call_args[0][0]
+        # Left (0x01) | Middle (0x04) = 0x05
+        assert packet[6] == 0x05
+        assert packet[7] == 10
+        assert packet[8] == 0x100 - 10
+        assert packet[9] == 5

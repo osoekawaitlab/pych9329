@@ -20,10 +20,11 @@ from pych9329.evdev_mapping import (
 )
 from pych9329.models import (
     MAX_ROLLOVER_KEYS,
-    KeyboardState,
+    KeyboardInput,
     KeyCode,
     MediaKey,
     MouseButton,
+    MouseInput,
     get_key_mapping,
 )
 from pych9329.protocol import CH9329Protocol
@@ -162,7 +163,7 @@ class CH9329Driver:
         if self._recorder is not None:
             self._recorder.record(KeyUpOperation())
 
-    def send_keyboard_state(self, state: KeyboardState) -> None:
+    def send_keyboard_state(self, state: KeyboardInput) -> None:
         """Send a complete keyboard state with multiple keys and modifiers.
 
         This is a low-level API that directly exposes CH9329's capability
@@ -173,28 +174,28 @@ class CH9329Driver:
 
         Examples:
             >>> # Press Ctrl+Shift+A
-            >>> state = KeyboardState(
+            >>> state = KeyboardInput(
             ...     modifiers={ModifierKey.KEY_LEFTCTRL, ModifierKey.KEY_LEFTSHIFT},
             ...     keys=[KeyCode.KEY_A]
             ... )
             >>> driver.send_keyboard_state(state)
             >>>
             >>> # Press A+B+C simultaneously with Shift
-            >>> state = KeyboardState(
+            >>> state = KeyboardInput(
             ...     modifiers={ModifierKey.KEY_LEFTSHIFT},
             ...     keys=[KeyCode.KEY_A, KeyCode.KEY_B, KeyCode.KEY_C]
             ... )
             >>> driver.send_keyboard_state(state)
             >>>
             >>> # Maximum 6 keys at once
-            >>> state = KeyboardState(
+            >>> state = KeyboardInput(
             ...     keys=[KeyCode.KEY_A, KeyCode.KEY_B, KeyCode.KEY_C,
             ...           KeyCode.KEY_D, KeyCode.KEY_E, KeyCode.KEY_F]
             ... )
             >>> driver.send_keyboard_state(state)
             >>>
             >>> # Release all keys
-            >>> driver.send_keyboard_state(KeyboardState())
+            >>> driver.send_keyboard_state(KeyboardInput())
         """
         # Build modifier byte from evdev modifier keys
         modifier_byte = 0x00
@@ -405,6 +406,58 @@ class CH9329Driver:
         # Record operation if recorder is attached
         if self._recorder is not None:
             self._recorder.record(MouseScrollOperation(amount))
+
+    def send_mouse_state(self, state: MouseInput) -> None:
+        """Send a complete mouse state with buttons, movement, and scroll.
+
+        This is a low-level API that directly exposes CH9329's capability
+        to send multiple simultaneous mouse button presses along with
+        relative movement and scroll in a single packet.
+
+        Args:
+            state: The mouse state containing buttons, movement, and scroll.
+
+        Examples:
+            >>> # Move right and down
+            >>> state = MouseInput(x=10, y=10)
+            >>> driver.send_mouse_state(state)
+            >>>
+            >>> # Left button pressed while moving
+            >>> state = MouseInput(
+            ...     buttons={MouseButton.BTN_LEFT},
+            ...     x=5,
+            ...     y=-5
+            ... )
+            >>> driver.send_mouse_state(state)
+            >>>
+            >>> # Multiple buttons with scroll
+            >>> state = MouseInput(
+            ...     buttons={MouseButton.BTN_LEFT, MouseButton.BTN_RIGHT},
+            ...     scroll=3
+            ... )
+            >>> driver.send_mouse_state(state)
+            >>>
+            >>> # Drag operation
+            >>> # Press and hold
+            >>> driver.send_mouse_state(MouseInput(buttons={MouseButton.BTN_LEFT}))
+            >>> # Move while holding
+            >>> driver.send_mouse_state(MouseInput(
+            ...     buttons={MouseButton.BTN_LEFT},
+            ...     x=10, y=10
+            ... ))
+            >>> # Release
+            >>> driver.send_mouse_state(MouseInput())
+        """
+        # Build button byte from evdev button codes
+        button_byte = 0x00
+        for button in state.buttons:
+            button_byte |= evdev_to_usb_hid_mouse(button.value)
+
+        # Build packet using protocol
+        packet = CH9329Protocol.build_mouse_rel_packet(
+            button_byte, state.x, state.y, state.scroll
+        )
+        self._adapter.send(packet)
 
     def media_key_down(self, key: MediaKey) -> None:
         """Press a media control key down without releasing it.
