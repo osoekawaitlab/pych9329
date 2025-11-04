@@ -13,7 +13,19 @@ if sys.version_info >= (3, 11):
 else:
     from typing_extensions import Self
 
-from pych9329.models import KeyCode, MediaKey, MouseButton, get_key_mapping
+from pych9329.evdev_mapping import (
+    evdev_to_usb_hid_keyboard,
+    evdev_to_usb_hid_modifier,
+    evdev_to_usb_hid_mouse,
+)
+from pych9329.models import (
+    MAX_ROLLOVER_KEYS,
+    KeyboardState,
+    KeyCode,
+    MediaKey,
+    MouseButton,
+    get_key_mapping,
+)
 from pych9329.protocol import CH9329Protocol
 from pych9329.recorder import (
     KeyDownOperation,
@@ -95,20 +107,23 @@ class CH9329Driver:
         for specific durations or pressing multiple keys simultaneously.
 
         Args:
-            key: The key to press down.
+            key: The key to press down (evdev KeyCode).
             shift: Whether to hold shift modifier.
             ctrl: Whether to hold ctrl modifier.
             alt: Whether to hold alt modifier.
             windows: Whether to hold windows modifier.
 
         Examples:
-            >>> driver.key_down(KeyCode.A)  # Hold 'a' down
+            >>> driver.key_down(KeyCode.KEY_A)  # Hold 'a' down
             >>> driver.key_up()  # Release it
             >>> # Hold Ctrl+Shift+A
-            >>> driver.key_down(KeyCode.A, ctrl=True, shift=True)
+            >>> driver.key_down(KeyCode.KEY_A, ctrl=True, shift=True)
             >>> driver.key_up()
         """
-        # Build modifier byte
+        # Convert evdev key code to USB HID scan code
+        usb_hid_keycode = evdev_to_usb_hid_keyboard(key.value)
+
+        # Build modifier byte (USB HID format)
         modifier = 0x00
         if ctrl:
             modifier |= 0x01
@@ -120,7 +135,9 @@ class CH9329Driver:
             modifier |= 0x08
 
         # Send key press packet
-        press_packet = CH9329Protocol.build_keyboard_press_packet(modifier, key.value)
+        press_packet = CH9329Protocol.build_keyboard_press_packet(
+            modifier, usb_hid_keycode
+        )
         self._adapter.send(press_packet)
 
         # Record operation if recorder is attached
@@ -144,6 +161,61 @@ class CH9329Driver:
         # Record operation if recorder is attached
         if self._recorder is not None:
             self._recorder.record(KeyUpOperation())
+
+    def send_keyboard_state(self, state: KeyboardState) -> None:
+        """Send a complete keyboard state with multiple keys and modifiers.
+
+        This is a low-level API that directly exposes CH9329's capability
+        to send up to 6 simultaneous key presses with 8 modifier keys.
+
+        Args:
+            state: The keyboard state containing modifiers and keys.
+
+        Examples:
+            >>> # Press Ctrl+Shift+A
+            >>> state = KeyboardState(
+            ...     modifiers={ModifierKey.KEY_LEFTCTRL, ModifierKey.KEY_LEFTSHIFT},
+            ...     keys=[KeyCode.KEY_A]
+            ... )
+            >>> driver.send_keyboard_state(state)
+            >>>
+            >>> # Press A+B+C simultaneously with Shift
+            >>> state = KeyboardState(
+            ...     modifiers={ModifierKey.KEY_LEFTSHIFT},
+            ...     keys=[KeyCode.KEY_A, KeyCode.KEY_B, KeyCode.KEY_C]
+            ... )
+            >>> driver.send_keyboard_state(state)
+            >>>
+            >>> # Maximum 6 keys at once
+            >>> state = KeyboardState(
+            ...     keys=[KeyCode.KEY_A, KeyCode.KEY_B, KeyCode.KEY_C,
+            ...           KeyCode.KEY_D, KeyCode.KEY_E, KeyCode.KEY_F]
+            ... )
+            >>> driver.send_keyboard_state(state)
+            >>>
+            >>> # Release all keys
+            >>> driver.send_keyboard_state(KeyboardState())
+        """
+        # Build modifier byte from evdev modifier keys
+        modifier_byte = 0x00
+        for modifier_key in state.modifiers:
+            modifier_byte |= evdev_to_usb_hid_modifier(modifier_key.value)
+
+        # Convert evdev key codes to USB HID scan codes
+        usb_hid_keys = [evdev_to_usb_hid_keyboard(key.value) for key in state.keys]
+
+        # Pad to 6 keys with zeros
+        while len(usb_hid_keys) < MAX_ROLLOVER_KEYS:
+            usb_hid_keys.append(0x00)
+
+        # Build packet: [modifier, reserved, key1, key2, key3, key4, key5, key6]
+        # This directly corresponds to USB HID keyboard report format
+        data = [modifier_byte, 0x00, *usb_hid_keys]
+        packet = [0x57, 0xAB, 0x00, 0x02, len(data), *data]
+        checksum = sum(packet) & 0xFF
+        packet.append(checksum)
+
+        self._adapter.send(bytes(packet))
 
     def press_key(
         self,
@@ -194,11 +266,22 @@ class CH9329Driver:
             return
 
         for char in text:
-            # Get modifier and keycode for this character
-            modifier, keycode = get_key_mapping(char)
+            # Get evdev modifier and keycode for this character
+            evdev_modifier, evdev_keycode = get_key_mapping(char)
+
+            # Convert evdev codes to USB HID codes
+            usb_hid_keycode = evdev_to_usb_hid_keyboard(evdev_keycode)
+            # Convert modifier if needed (evdev modifier code to USB HID modifier byte)
+            usb_hid_modifier = (
+                evdev_to_usb_hid_modifier(evdev_modifier)
+                if evdev_modifier != 0x00
+                else 0x00
+            )
 
             # Send key press
-            press_packet = CH9329Protocol.build_keyboard_press_packet(modifier, keycode)
+            press_packet = CH9329Protocol.build_keyboard_press_packet(
+                usb_hid_modifier, usb_hid_keycode
+            )
             self._adapter.send(press_packet)
 
             # Send key release
@@ -255,15 +338,18 @@ class CH9329Driver:
         buttons down for drag operations.
 
         Args:
-            button: The mouse button to press down.
+            button: The mouse button to press down (evdev MouseButton).
 
         Examples:
-            >>> driver.mouse_button_down(MouseButton.LEFT)
+            >>> driver.mouse_button_down(MouseButton.BTN_LEFT)
             >>> driver.mouse_move_relative(100, 100)  # Drag
             >>> driver.mouse_button_up()
         """
+        # Convert evdev button code to USB HID button bit
+        usb_hid_button = evdev_to_usb_hid_mouse(button.value)
+
         # Send button press packet
-        press_packet = CH9329Protocol.build_mouse_rel_packet(button.value, 0, 0, 0)
+        press_packet = CH9329Protocol.build_mouse_rel_packet(usb_hid_button, 0, 0, 0)
         self._adapter.send(press_packet)
 
         # Record operation if recorder is attached

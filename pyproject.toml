@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.10"
 authors = [{name = "osoken"}]
 dependencies = [
+    "evdev>=1.9.2",
     "pyserial>=3.5",
     "typing-extensions>=4.0.0; python_version < '3.11'",
 ]

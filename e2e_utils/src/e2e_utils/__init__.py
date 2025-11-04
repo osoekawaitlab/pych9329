@@ -2,14 +2,18 @@
 
 from collections.abc import Generator
 from types import TracebackType
+from typing import TYPE_CHECKING
 from urllib.parse import urljoin
 from urllib.request import Request, urlopen
 
 import pytest
-from hid_interceptor import InputEvent
 from hid_recorder import EventItem
 from pydantic import AnyHttpUrl, BaseModel, TypeAdapter
 from ulid import ULID
+
+if TYPE_CHECKING:
+    from hid_interceptor import InputEvent
+
 
 AnyHttpUrlAdapter = TypeAdapter(AnyHttpUrl)
 

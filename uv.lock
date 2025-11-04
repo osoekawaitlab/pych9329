@@ -785,6 +785,7 @@ wheels = [
 name = "pych9329"
 source = { editable = "." }
 dependencies = [
+    { name = "evdev" },
     { name = "pyserial" },
     { name = "typing-extensions", marker = "python_full_version < '3.11'" },
 ]
@@ -813,6 +814,7 @@ docs = [
 
 [package.metadata]
 requires-dist = [
+    { name = "evdev", specifier = ">=1.9.2" },
     { name = "pyserial", specifier = ">=3.5" },
     { name = "typing-extensions", marker = "python_full_version < '3.11'", specifier = ">=4.0.0" },
 ]

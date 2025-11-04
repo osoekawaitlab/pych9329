@@ -5,7 +5,7 @@ from unittest.mock import Mock
 import pytest
 
 from pych9329.driver import CH9329Driver
-from pych9329.models import KeyCode, MediaKey, MouseButton
+from pych9329.models import KeyboardState, KeyCode, MediaKey, ModifierKey, MouseButton
 
 
 class TestCH9329DriverInit:
@@ -34,7 +34,7 @@ class TestCH9329DriverKeyboard:
         mock_adapter = Mock()
         driver = CH9329Driver(mock_adapter)
 
-        driver.press_key(KeyCode.A)
+        driver.press_key(KeyCode.KEY_A)
 
         # Should send press packet and then release packet
         assert mock_adapter.send.call_count == 2
@@ -44,7 +44,7 @@ class TestCH9329DriverKeyboard:
         mock_adapter = Mock()
         driver = CH9329Driver(mock_adapter)
 
-        driver.press_key(KeyCode.A, shift=True)
+        driver.press_key(KeyCode.KEY_A, shift=True)
 
         # Should send press with shift and then release
         assert mock_adapter.send.call_count == 2
@@ -58,7 +58,7 @@ class TestCH9329DriverKeyboard:
         mock_adapter = Mock()
         driver = CH9329Driver(mock_adapter)
 
-        driver.press_key(KeyCode.C, ctrl=True)
+        driver.press_key(KeyCode.KEY_C, ctrl=True)
 
         assert mock_adapter.send.call_count == 2
         # First call should have ctrl modifier (0x01)
@@ -70,7 +70,7 @@ class TestCH9329DriverKeyboard:
         mock_adapter = Mock()
         driver = CH9329Driver(mock_adapter)
 
-        driver.press_key(KeyCode.C, ctrl=True, shift=True)
+        driver.press_key(KeyCode.KEY_C, ctrl=True, shift=True)
 
         assert mock_adapter.send.call_count == 2
         # First call should have ctrl + shift (0x01 | 0x02 = 0x03)
@@ -157,7 +157,7 @@ class TestCH9329DriverMouse:
         mock_adapter = Mock()
         driver = CH9329Driver(mock_adapter)
 
-        driver.mouse_click(MouseButton.LEFT)
+        driver.mouse_click(MouseButton.BTN_LEFT)
 
         # Should send press and release packets
         assert mock_adapter.send.call_count == 2
@@ -167,7 +167,7 @@ class TestCH9329DriverMouse:
         mock_adapter = Mock()
         driver = CH9329Driver(mock_adapter)
 
-        driver.mouse_click(MouseButton.RIGHT)
+        driver.mouse_click(MouseButton.BTN_RIGHT)
 
         assert mock_adapter.send.call_count == 2
 
@@ -291,7 +291,7 @@ class TestCH9329DriverSeparatedKeyboard:
         mock_adapter = Mock()
         driver = CH9329Driver(mock_adapter)
 
-        driver.key_down(KeyCode.A)
+        driver.key_down(KeyCode.KEY_A)
 
         # Should send only press packet
         mock_adapter.send.assert_called_once()
@@ -311,7 +311,7 @@ class TestCH9329DriverSeparatedKeyboard:
         mock_adapter = Mock()
         driver = CH9329Driver(mock_adapter)
 
-        driver.key_down(KeyCode.C, shift=True, ctrl=True)
+        driver.key_down(KeyCode.KEY_C, shift=True, ctrl=True)
 
         mock_adapter.send.assert_called_once()
         # Check that modifier byte has shift + ctrl (0x02 | 0x01 = 0x03)
@@ -323,7 +323,7 @@ class TestCH9329DriverSeparatedKeyboard:
         mock_adapter = Mock()
         driver = CH9329Driver(mock_adapter)
 
-        driver.key_down(KeyCode.B)
+        driver.key_down(KeyCode.KEY_B)
         driver.key_up()
 
         # Should have sent 2 packets total
@@ -338,7 +338,7 @@ class TestCH9329DriverSeparatedMouse:
         mock_adapter = Mock()
         driver = CH9329Driver(mock_adapter)
 
-        driver.mouse_button_down(MouseButton.LEFT)
+        driver.mouse_button_down(MouseButton.BTN_LEFT)
 
         # Should send only press packet
         mock_adapter.send.assert_called_once()
@@ -358,7 +358,7 @@ class TestCH9329DriverSeparatedMouse:
         mock_adapter = Mock()
         driver = CH9329Driver(mock_adapter)
 
-        driver.mouse_button_down(MouseButton.RIGHT)
+        driver.mouse_button_down(MouseButton.BTN_RIGHT)
         driver.mouse_button_up()
 
         # Should have sent 2 packets total
@@ -412,7 +412,7 @@ class TestCH9329DriverWithRecorder:
         driver = CH9329Driver(mock_adapter, recorder=recorder)
 
         recorder.start_recording()
-        driver.key_down(KeyCode.A)
+        driver.key_down(KeyCode.KEY_A)
         driver.key_up()
         operations = recorder.stop_recording()
 
@@ -425,7 +425,7 @@ class TestCH9329DriverWithRecorder:
         driver = CH9329Driver(mock_adapter)
 
         # Should work without errors
-        driver.key_down(KeyCode.A)
+        driver.key_down(KeyCode.KEY_A)
         driver.key_up()
 
         assert mock_adapter.send.call_count == 2
@@ -439,7 +439,7 @@ class TestCH9329DriverBackwardCompatibility:
         mock_adapter = Mock()
         driver = CH9329Driver(mock_adapter)
 
-        driver.press_key(KeyCode.A)
+        driver.press_key(KeyCode.KEY_A)
 
         # Should send 2 packets (press and release)
         assert mock_adapter.send.call_count == 2
@@ -449,7 +449,7 @@ class TestCH9329DriverBackwardCompatibility:
         mock_adapter = Mock()
         driver = CH9329Driver(mock_adapter)
 
-        driver.mouse_click(MouseButton.LEFT)
+        driver.mouse_click(MouseButton.BTN_LEFT)
 
         # Should send 2 packets (press and release)
         assert mock_adapter.send.call_count == 2
@@ -463,3 +463,121 @@ class TestCH9329DriverBackwardCompatibility:
 
         # Should send 2 packets (press and release)
         assert mock_adapter.send.call_count == 2
+
+
+class TestCH9329DriverSendKeyboardState:
+    """Tests for send_keyboard_state() low-level API."""
+
+    def test_empty_state_releases_all_keys(self) -> None:
+        """Test that empty state sends all zeros (release packet)."""
+        mock_adapter = Mock()
+        driver = CH9329Driver(mock_adapter)
+
+        driver.send_keyboard_state(KeyboardState())
+
+        # Should send one packet
+        assert mock_adapter.send.call_count == 1
+        packet = mock_adapter.send.call_args[0][0]
+
+        # Check packet structure: header + cmd + len + [modifier(0), reserved(0), 6 keys(0)] + checksum
+        # [0x57, 0xAB, 0x00, 0x02, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, checksum]
+        assert len(packet) == 14
+        assert packet[0:5] == b"\x57\xab\x00\x02\x08"
+        # Modifier and all 6 keys should be 0
+        assert packet[5:13] == b"\x00" * 8
+
+    def test_single_key_without_modifiers(self) -> None:
+        """Test sending single key without modifiers."""
+        mock_adapter = Mock()
+        driver = CH9329Driver(mock_adapter)
+
+        state = KeyboardState(keys=[KeyCode.KEY_A])
+        driver.send_keyboard_state(state)
+
+        packet = mock_adapter.send.call_args[0][0]
+        # Modifier should be 0, first key should be KEY_A (USB HID: 0x04)
+        assert packet[5] == 0x00  # No modifiers
+        assert packet[6] == 0x00  # Reserved
+        assert packet[7] == 0x04  # KEY_A in USB HID
+
+    def test_single_key_with_modifiers(self) -> None:
+        """Test sending key with multiple modifiers."""
+        mock_adapter = Mock()
+        driver = CH9329Driver(mock_adapter)
+
+        state = KeyboardState(
+            modifiers={ModifierKey.KEY_LEFTCTRL, ModifierKey.KEY_LEFTSHIFT},
+            keys=[KeyCode.KEY_A],
+        )
+        driver.send_keyboard_state(state)
+
+        packet = mock_adapter.send.call_args[0][0]
+        # Modifier should be Ctrl(0x01) | Shift(0x02) = 0x03
+        assert packet[5] == 0x03  # Ctrl + Shift
+        assert packet[7] == 0x04  # KEY_A in USB HID
+
+    def test_multiple_keys_simultaneously(self) -> None:
+        """Test sending multiple keys at once."""
+        mock_adapter = Mock()
+        driver = CH9329Driver(mock_adapter)
+
+        state = KeyboardState(keys=[KeyCode.KEY_A, KeyCode.KEY_B, KeyCode.KEY_C])
+        driver.send_keyboard_state(state)
+
+        packet = mock_adapter.send.call_args[0][0]
+        # Keys should be A(0x04), B(0x05), C(0x06)
+        assert packet[7] == 0x04  # KEY_A
+        assert packet[8] == 0x05  # KEY_B
+        assert packet[9] == 0x06  # KEY_C
+        # Remaining keys should be 0
+        assert packet[10] == 0x00
+        assert packet[11] == 0x00
+        assert packet[12] == 0x00
+
+    def test_maximum_six_keys(self) -> None:
+        """Test sending exactly 6 keys."""
+        mock_adapter = Mock()
+        driver = CH9329Driver(mock_adapter)
+
+        state = KeyboardState(
+            keys=[
+                KeyCode.KEY_A,
+                KeyCode.KEY_B,
+                KeyCode.KEY_C,
+                KeyCode.KEY_D,
+                KeyCode.KEY_E,
+                KeyCode.KEY_F,
+            ]
+        )
+        driver.send_keyboard_state(state)
+
+        packet = mock_adapter.send.call_args[0][0]
+        # All 6 key slots should be filled
+        assert packet[7] == 0x04  # KEY_A
+        assert packet[8] == 0x05  # KEY_B
+        assert packet[9] == 0x06  # KEY_C
+        assert packet[10] == 0x07  # KEY_D
+        assert packet[11] == 0x08  # KEY_E
+        assert packet[12] == 0x09  # KEY_F
+
+    def test_all_modifiers(self) -> None:
+        """Test sending all 8 modifier keys."""
+        mock_adapter = Mock()
+        driver = CH9329Driver(mock_adapter)
+
+        state = KeyboardState(
+            modifiers={
+                ModifierKey.KEY_LEFTCTRL,
+                ModifierKey.KEY_RIGHTCTRL,
+                ModifierKey.KEY_LEFTSHIFT,
+                ModifierKey.KEY_RIGHTSHIFT,
+                ModifierKey.KEY_LEFTALT,
+                ModifierKey.KEY_RIGHTALT,
+                ModifierKey.KEY_LEFTMETA,
+                ModifierKey.KEY_RIGHTMETA,
+            }
+        )
+        driver.send_keyboard_state(state)
+
+        packet = mock_adapter.send.call_args[0][0]
+        assert packet[5] == 0xFF  # All modifiers

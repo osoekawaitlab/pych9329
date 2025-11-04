@@ -35,23 +35,23 @@ class TestKeyDownOperation:
     def test_execute_calls_driver_key_down(self) -> None:
         """Test that execute() calls driver.key_down()."""
         driver = MagicMock()
-        operation = KeyDownOperation(KeyCode.A, shift=True, ctrl=False)
+        operation = KeyDownOperation(KeyCode.KEY_A, shift=True, ctrl=False)
 
         operation.execute(driver)
 
         driver.key_down.assert_called_once_with(
-            KeyCode.A, shift=True, ctrl=False, alt=False, windows=False
+            KeyCode.KEY_A, shift=True, ctrl=False, alt=False, windows=False
         )
 
     def test_to_dict_serializes_correctly(self) -> None:
         """Test that to_dict() serializes the operation."""
-        operation = KeyDownOperation(KeyCode.B, shift=False, ctrl=True, alt=True)
+        operation = KeyDownOperation(KeyCode.KEY_B, shift=False, ctrl=True, alt=True)
 
         result = operation.to_dict()
 
         assert result == {
             "type": "key_down",
-            "key": "B",
+            "key": "KEY_B",
             "shift": False,
             "ctrl": True,
             "alt": True,
@@ -62,7 +62,7 @@ class TestKeyDownOperation:
         """Test that from_dict() deserializes the operation."""
         data = {
             "type": "key_down",
-            "key": "C",
+            "key": "KEY_C",
             "shift": True,
             "ctrl": False,
             "alt": False,
@@ -71,7 +71,7 @@ class TestKeyDownOperation:
 
         operation = KeyDownOperation.from_dict(data)
 
-        assert operation.key == KeyCode.C
+        assert operation.key == KeyCode.KEY_C
         assert operation.shift is True
         assert operation.ctrl is False
         assert operation.alt is False
@@ -79,11 +79,11 @@ class TestKeyDownOperation:
 
     def test_from_dict_with_missing_modifiers(self) -> None:
         """Test that from_dict() handles missing modifier keys."""
-        data = {"type": "key_down", "key": "D"}
+        data = {"type": "key_down", "key": "KEY_D"}
 
         operation = KeyDownOperation.from_dict(data)
 
-        assert operation.key == KeyCode.D
+        assert operation.key == KeyCode.KEY_D
         assert operation.shift is False
         assert operation.ctrl is False
         assert operation.alt is False
@@ -125,27 +125,27 @@ class TestMouseButtonDownOperation:
     def test_execute_calls_driver_mouse_button_down(self) -> None:
         """Test that execute() calls driver.mouse_button_down()."""
         driver = MagicMock()
-        operation = MouseButtonDownOperation(MouseButton.LEFT)
+        operation = MouseButtonDownOperation(MouseButton.BTN_LEFT)
 
         operation.execute(driver)
 
-        driver.mouse_button_down.assert_called_once_with(MouseButton.LEFT)
+        driver.mouse_button_down.assert_called_once_with(MouseButton.BTN_LEFT)
 
     def test_to_dict_serializes_correctly(self) -> None:
         """Test that to_dict() serializes the operation."""
-        operation = MouseButtonDownOperation(MouseButton.RIGHT)
+        operation = MouseButtonDownOperation(MouseButton.BTN_RIGHT)
 
         result = operation.to_dict()
 
-        assert result == {"type": "mouse_button_down", "button": "RIGHT"}
+        assert result == {"type": "mouse_button_down", "button": "BTN_RIGHT"}
 
     def test_from_dict_deserializes_correctly(self) -> None:
         """Test that from_dict() deserializes the operation."""
-        data = {"type": "mouse_button_down", "button": "MIDDLE"}
+        data = {"type": "mouse_button_down", "button": "BTN_MIDDLE"}
 
         operation = MouseButtonDownOperation.from_dict(data)
 
-        assert operation.button == MouseButton.MIDDLE
+        assert operation.button == MouseButton.BTN_MIDDLE
 
 
 class TestMouseButtonUpOperation:
@@ -370,7 +370,7 @@ class TestOperationRecorder:
     def test_stop_recording_returns_operations(self) -> None:
         """Test that stop_recording() returns recorded operations."""
         recorder = OperationRecorder()
-        op1 = KeyDownOperation(KeyCode.A)
+        op1 = KeyDownOperation(KeyCode.KEY_A)
         op2 = KeyUpOperation()
         recorder._operations = [op1, op2]
         recorder._recording = True
@@ -384,7 +384,7 @@ class TestOperationRecorder:
         """Test that record() adds operation when recording is active."""
         recorder = OperationRecorder()
         recorder.start_recording()
-        operation = KeyDownOperation(KeyCode.B)
+        operation = KeyDownOperation(KeyCode.KEY_B)
 
         recorder.record(operation)
 
@@ -393,7 +393,7 @@ class TestOperationRecorder:
     def test_record_ignores_operation_when_not_recording(self) -> None:
         """Test that record() ignores operation when not recording."""
         recorder = OperationRecorder()
-        operation = KeyDownOperation(KeyCode.C)
+        operation = KeyDownOperation(KeyCode.KEY_C)
 
         recorder.record(operation)
 
@@ -405,7 +405,7 @@ class TestOperationRecorder:
         mock_time.side_effect = [0.0, 0.1, 0.2]  # start, first record, second record
         recorder = OperationRecorder()
         recorder.start_recording()
-        op1 = KeyDownOperation(KeyCode.D)
+        op1 = KeyDownOperation(KeyCode.KEY_D)
         op2 = KeyUpOperation()
 
         recorder.record(op1)
@@ -426,7 +426,7 @@ class TestOperationRecorder:
         mock_time.side_effect = [0.0, 0.0005, 0.001]  # 0.5ms delay (should skip)
         recorder = OperationRecorder()
         recorder.start_recording()
-        op1 = KeyDownOperation(KeyCode.E)
+        op1 = KeyDownOperation(KeyCode.KEY_E)
         op2 = KeyUpOperation()
 
         recorder.record(op1)
@@ -441,7 +441,7 @@ class TestOperationRecorder:
         """Test that save() writes operations to JSON file."""
         recorder = OperationRecorder()
         recorder._operations = [
-            KeyDownOperation(KeyCode.F),
+            KeyDownOperation(KeyCode.KEY_F),
             KeyUpOperation(),
         ]
 
@@ -455,7 +455,7 @@ class TestOperationRecorder:
 
             assert len(data) == 2
             assert data[0]["type"] == "key_down"
-            assert data[0]["key"] == "F"
+            assert data[0]["key"] == "KEY_F"
             assert data[1]["type"] == "key_up"
         finally:
             Path(filepath).unlink()
@@ -465,7 +465,7 @@ class TestOperationRecorder:
         data = [
             {
                 "type": "key_down",
-                "key": "G",
+                "key": "KEY_G",
                 "shift": False,
                 "ctrl": False,
                 "alt": False,
@@ -483,7 +483,7 @@ class TestOperationRecorder:
 
             assert len(operations) == 2
             assert isinstance(operations[0], KeyDownOperation)
-            assert operations[0].key == KeyCode.G
+            assert operations[0].key == KeyCode.KEY_G
             assert isinstance(operations[1], KeyUpOperation)
         finally:
             Path(filepath).unlink()
@@ -497,9 +497,9 @@ class TestOperationReplayer:
         driver = MagicMock()
         replayer = OperationReplayer()
         operations = [
-            KeyDownOperation(KeyCode.H),
+            KeyDownOperation(KeyCode.KEY_H),
             KeyUpOperation(),
-            MouseButtonDownOperation(MouseButton.LEFT),
+            MouseButtonDownOperation(MouseButton.BTN_LEFT),
             MouseButtonUpOperation(),
         ]
 
@@ -517,7 +517,7 @@ class TestOperationReplayer:
         data = [
             {
                 "type": "key_down",
-                "key": "I",
+                "key": "KEY_I",
                 "shift": False,
                 "ctrl": False,
                 "alt": False,
@@ -545,9 +545,12 @@ class TestOperationFromDict:
     def test_deserializes_all_operation_types(self) -> None:
         """Test that _operation_from_dict() handles all operation types."""
         test_cases: list[tuple[dict[str, Any], type[Operation]]] = [
-            ({"type": "key_down", "key": "A"}, KeyDownOperation),
+            ({"type": "key_down", "key": "KEY_A"}, KeyDownOperation),
             ({"type": "key_up"}, KeyUpOperation),
-            ({"type": "mouse_button_down", "button": "LEFT"}, MouseButtonDownOperation),
+            (
+                {"type": "mouse_button_down", "button": "BTN_LEFT"},
+                MouseButtonDownOperation,
+            ),
             ({"type": "mouse_button_up"}, MouseButtonUpOperation),
             ({"type": "media_key_down", "key": "MUTE"}, MediaKeyDownOperation),
             ({"type": "media_key_up"}, MediaKeyUpOperation),
