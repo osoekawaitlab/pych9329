@@ -164,7 +164,7 @@ class CH9329Driver:
         if self._recorder is not None:
             self._recorder.record(KeyUpOperation())
 
-    def send_keyboard_state(self, state: KeyboardInput) -> None:
+    def send_keyboard_input(self, state: KeyboardInput) -> None:
         """Send a complete keyboard state with multiple keys and modifiers.
 
         This is a low-level API that directly exposes CH9329's capability
@@ -179,24 +179,24 @@ class CH9329Driver:
             ...     modifiers={ModifierKey.KEY_LEFTCTRL, ModifierKey.KEY_LEFTSHIFT},
             ...     keys=[KeyCode.KEY_A]
             ... )
-            >>> driver.send_keyboard_state(state)
+            >>> driver.send_keyboard_input(state)
             >>>
             >>> # Press A+B+C simultaneously with Shift
             >>> state = KeyboardInput(
             ...     modifiers={ModifierKey.KEY_LEFTSHIFT},
             ...     keys=[KeyCode.KEY_A, KeyCode.KEY_B, KeyCode.KEY_C]
             ... )
-            >>> driver.send_keyboard_state(state)
+            >>> driver.send_keyboard_input(state)
             >>>
             >>> # Maximum 6 keys at once
             >>> state = KeyboardInput(
             ...     keys=[KeyCode.KEY_A, KeyCode.KEY_B, KeyCode.KEY_C,
             ...           KeyCode.KEY_D, KeyCode.KEY_E, KeyCode.KEY_F]
             ... )
-            >>> driver.send_keyboard_state(state)
+            >>> driver.send_keyboard_input(state)
             >>>
             >>> # Release all keys
-            >>> driver.send_keyboard_state(KeyboardInput())
+            >>> driver.send_keyboard_input(KeyboardInput())
         """
         # Build modifier byte from evdev modifier keys
         modifier_byte = 0x00
@@ -408,7 +408,7 @@ class CH9329Driver:
         if self._recorder is not None:
             self._recorder.record(MouseScrollOperation(amount))
 
-    def send_mouse_state(self, state: MouseInput) -> None:
+    def send_mouse_input(self, state: MouseInput) -> None:
         """Send a complete mouse state with buttons, movement, and scroll.
 
         This is a low-level API that directly exposes CH9329's capability
@@ -421,7 +421,7 @@ class CH9329Driver:
         Examples:
             >>> # Move right and down
             >>> state = MouseInput(x=10, y=10)
-            >>> driver.send_mouse_state(state)
+            >>> driver.send_mouse_input(state)
             >>>
             >>> # Left button pressed while moving
             >>> state = MouseInput(
@@ -429,25 +429,25 @@ class CH9329Driver:
             ...     x=5,
             ...     y=-5
             ... )
-            >>> driver.send_mouse_state(state)
+            >>> driver.send_mouse_input(state)
             >>>
             >>> # Multiple buttons with scroll
             >>> state = MouseInput(
             ...     buttons={MouseButton.BTN_LEFT, MouseButton.BTN_RIGHT},
             ...     scroll=3
             ... )
-            >>> driver.send_mouse_state(state)
+            >>> driver.send_mouse_input(state)
             >>>
             >>> # Drag operation
             >>> # Press and hold
-            >>> driver.send_mouse_state(MouseInput(buttons={MouseButton.BTN_LEFT}))
+            >>> driver.send_mouse_input(MouseInput(buttons={MouseButton.BTN_LEFT}))
             >>> # Move while holding
-            >>> driver.send_mouse_state(MouseInput(
+            >>> driver.send_mouse_input(MouseInput(
             ...     buttons={MouseButton.BTN_LEFT},
             ...     x=10, y=10
             ... ))
             >>> # Release
-            >>> driver.send_mouse_state(MouseInput())
+            >>> driver.send_mouse_input(MouseInput())
         """
         # Build button byte from evdev button codes
         button_byte = 0x00

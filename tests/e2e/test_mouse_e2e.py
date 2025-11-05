@@ -26,17 +26,17 @@ def test_mouse_button_events(
     with capture_session, pych9329.SerialAdapter(port="/dev/ttyUSB0") as serial_adapter:
         driver = pych9329.CH9329Driver(serial_adapter)
         # Press left button
-        driver.send_mouse_state(
+        driver.send_mouse_input(
             pych9329.MouseInput(buttons={pych9329.MouseButton.BTN_LEFT})
         )
         # Release all buttons
-        driver.send_mouse_state(pych9329.MouseInput())
+        driver.send_mouse_input(pych9329.MouseInput())
         # Press right button
-        driver.send_mouse_state(
+        driver.send_mouse_input(
             pych9329.MouseInput(buttons={pych9329.MouseButton.BTN_RIGHT})
         )
         # Release all buttons
-        driver.send_mouse_state(pych9329.MouseInput())
+        driver.send_mouse_input(pych9329.MouseInput())
 
     expected_codes_and_values = [
         (f"('{pych9329.MouseButton.BTN_LEFT.name}', 'BTN_MOUSE')", 1),
@@ -60,7 +60,7 @@ def test_mouse_multiple_buttons(
     with capture_session, pych9329.SerialAdapter(port="/dev/ttyUSB0") as serial_adapter:
         driver = pych9329.CH9329Driver(serial_adapter)
         # Press left and right buttons simultaneously
-        driver.send_mouse_state(
+        driver.send_mouse_input(
             pych9329.MouseInput(
                 buttons={
                     pych9329.MouseButton.BTN_LEFT,
@@ -69,7 +69,7 @@ def test_mouse_multiple_buttons(
             )
         )
         # Release all buttons
-        driver.send_mouse_state(pych9329.MouseInput())
+        driver.send_mouse_input(pych9329.MouseInput())
 
     expected_codes_and_values = [
         (f"('{pych9329.MouseButton.BTN_LEFT.name}', 'BTN_MOUSE')", 1),
@@ -93,9 +93,9 @@ def test_mouse_movement_events(
     with capture_session, pych9329.SerialAdapter(port="/dev/ttyUSB0") as serial_adapter:
         driver = pych9329.CH9329Driver(serial_adapter)
         # Move right and down
-        driver.send_mouse_state(pych9329.MouseInput(x=10, y=10))
+        driver.send_mouse_input(pych9329.MouseInput(x=10, y=10))
         # Move left and up
-        driver.send_mouse_state(pych9329.MouseInput(x=-10, y=-10))
+        driver.send_mouse_input(pych9329.MouseInput(x=-10, y=-10))
 
     # Movement events should be captured as REL_X and REL_Y
     # Note: We expect 4 events: REL_X (10), REL_Y (10), REL_X (-10), REL_Y (-10)
@@ -112,9 +112,9 @@ def test_mouse_scroll_events(
     with capture_session, pych9329.SerialAdapter(port="/dev/ttyUSB0") as serial_adapter:
         driver = pych9329.CH9329Driver(serial_adapter)
         # Scroll up
-        driver.send_mouse_state(pych9329.MouseInput(scroll=3))
+        driver.send_mouse_input(pych9329.MouseInput(scroll=3))
         # Scroll down
-        driver.send_mouse_state(pych9329.MouseInput(scroll=-3))
+        driver.send_mouse_input(pych9329.MouseInput(scroll=-3))
 
     expected_codes_and_values = [
         ("REL_WHEEL", 3),
@@ -138,11 +138,11 @@ def test_mouse_button_with_movement(
     with capture_session, pych9329.SerialAdapter(port="/dev/ttyUSB0") as serial_adapter:
         driver = pych9329.CH9329Driver(serial_adapter)
         # Drag operation: press left button and move
-        driver.send_mouse_state(
+        driver.send_mouse_input(
             pych9329.MouseInput(buttons={pych9329.MouseButton.BTN_LEFT}, x=5, y=5)
         )
         # Release button
-        driver.send_mouse_state(pych9329.MouseInput())
+        driver.send_mouse_input(pych9329.MouseInput())
 
     expected_codes_and_values = [
         (f"('{pych9329.MouseButton.BTN_LEFT.name}', 'BTN_MOUSE')", 1),
@@ -167,8 +167,8 @@ def test_mouse_all_buttons(
     with capture_session, pych9329.SerialAdapter(port="/dev/ttyUSB0") as serial_adapter:
         driver = pych9329.CH9329Driver(serial_adapter)
         for button in pych9329.MouseButton:
-            driver.send_mouse_state(pych9329.MouseInput(buttons={button}))
-            driver.send_mouse_state(pych9329.MouseInput())
+            driver.send_mouse_input(pych9329.MouseInput(buttons={button}))
+            driver.send_mouse_input(pych9329.MouseInput())
 
     expected_codes_and_values: list[tuple[str, int]] = [
         (f"('{pych9329.MouseButton.BTN_LEFT.name}', 'BTN_MOUSE')", 1),

@@ -50,8 +50,8 @@ def test_keyboard_input_events_many_keys(
     with capture_session, pych9329.SerialAdapter(port="/dev/ttyUSB0") as serial_adapter:
         driver = pych9329.CH9329Driver(serial_adapter)
         for state in (state_1, state_2, state_3):
-            driver.send_keyboard_state(state)
-        driver.send_keyboard_state(pych9329.KeyboardInput())
+            driver.send_keyboard_input(state)
+        driver.send_keyboard_input(pych9329.KeyboardInput())
     expected_codes_and_values = [
         (pych9329.KeyCode.KEY_A.name, 1),
         (pych9329.KeyCode.KEY_B.name, 1),
@@ -93,8 +93,8 @@ def test_keyboard_input_events_modifiers(
     with capture_session, pych9329.SerialAdapter(port="/dev/ttyUSB0") as serial_adapter:
         driver = pych9329.CH9329Driver(serial_adapter)
         for state in (state_1, state_2):
-            driver.send_keyboard_state(state)
-        driver.send_keyboard_state(pych9329.KeyboardInput())
+            driver.send_keyboard_input(state)
+        driver.send_keyboard_input(pych9329.KeyboardInput())
     expected_codes_and_values = [
         (pych9329.ModifierKey.KEY_LEFTCTRL.name, 1),
         (pych9329.KeyCode.KEY_A.name, 1),
@@ -123,8 +123,8 @@ def test_keyboard_input_modifier_key_each(
                 modifiers={mod_key},
                 keys=[],
             )
-            driver.send_keyboard_state(state)
-            driver.send_keyboard_state(pych9329.KeyboardInput())
+            driver.send_keyboard_input(state)
+            driver.send_keyboard_input(pych9329.KeyboardInput())
     expected_codes_and_values: list[tuple[str, int]] = []
     for mod_key in pych9329.ModifierKey:
         expected_codes_and_values.append((mod_key.name, 1))
@@ -148,8 +148,8 @@ def test_keyboard_input_all_keys(
             state = pych9329.KeyboardInput(
                 keys=[key],
             )
-            driver.send_keyboard_state(state)
-            driver.send_keyboard_state(pych9329.KeyboardInput())
+            driver.send_keyboard_input(state)
+            driver.send_keyboard_input(pych9329.KeyboardInput())
     expected_codes_and_values: list[tuple[str, int]] = []
     for key in pych9329.KeyCode:
         expected_codes_and_values.append((key.name, 1))
