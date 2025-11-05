@@ -67,47 +67,47 @@ class CH9329Driver:
         """
         self._adapter = adapter
 
-    def send_keyboard_input(self, state: KeyboardInput) -> None:
-        """Send a complete keyboard state with multiple keys and modifiers.
+    def send_keyboard_input(self, input_data: KeyboardInput) -> None:
+        """Send a complete keyboard input with multiple keys and modifiers.
 
         This is a low-level API that directly exposes CH9329's capability
         to send up to 6 simultaneous key presses with 8 modifier keys.
 
         Args:
-            state: The keyboard state containing modifiers and keys.
+            input_data: The keyboard input containing modifiers and keys.
 
         Examples:
             >>> # Press Ctrl+Shift+A
-            >>> state = KeyboardInput(
+            >>> input_data = KeyboardInput(
             ...     modifiers={ModifierKey.KEY_LEFTCTRL, ModifierKey.KEY_LEFTSHIFT},
             ...     keys=[KeyCode.KEY_A]
             ... )
-            >>> driver.send_keyboard_input(state)
+            >>> driver.send_keyboard_input(input_data)
             >>>
             >>> # Press A+B+C simultaneously with Shift
-            >>> state = KeyboardInput(
+            >>> input_data = KeyboardInput(
             ...     modifiers={ModifierKey.KEY_LEFTSHIFT},
             ...     keys=[KeyCode.KEY_A, KeyCode.KEY_B, KeyCode.KEY_C]
             ... )
-            >>> driver.send_keyboard_input(state)
+            >>> driver.send_keyboard_input(input_data)
             >>>
             >>> # Maximum 6 keys at once
-            >>> state = KeyboardInput(
+            >>> input_data = KeyboardInput(
             ...     keys=[KeyCode.KEY_A, KeyCode.KEY_B, KeyCode.KEY_C,
             ...           KeyCode.KEY_D, KeyCode.KEY_E, KeyCode.KEY_F]
             ... )
-            >>> driver.send_keyboard_input(state)
+            >>> driver.send_keyboard_input(input_data)
             >>>
             >>> # Release all keys
             >>> driver.send_keyboard_input(KeyboardInput())
         """
         # Build modifier byte from evdev modifier keys
         modifier_byte = 0x00
-        for modifier_key in state.modifiers:
+        for modifier_key in input_data.modifiers:
             modifier_byte |= evdev_to_usb_hid_modifier(modifier_key.value)
 
         # Convert evdev key codes to USB HID scan codes
-        usb_hid_keys = [evdev_to_usb_hid_keyboard(key.value) for key in state.keys]
+        usb_hid_keys = [evdev_to_usb_hid_keyboard(key.value) for key in input_data.keys]
 
         # Pad to 6 keys with zeros
         while len(usb_hid_keys) < MAX_ROLLOVER_KEYS:
@@ -122,35 +122,35 @@ class CH9329Driver:
 
         self._adapter.send(bytes(packet))
 
-    def send_mouse_input(self, state: MouseInput) -> None:
-        """Send a complete mouse state with buttons, movement, and scroll.
+    def send_mouse_input(self, input_data: MouseInput) -> None:
+        """Send a complete mouse input with buttons, movement, and scroll.
 
         This is a low-level API that directly exposes CH9329's capability
         to send multiple simultaneous mouse button presses along with
         relative movement and scroll in a single packet.
 
         Args:
-            state: The mouse state containing buttons, movement, and scroll.
+            input_data: The mouse input containing buttons, movement, and scroll.
 
         Examples:
             >>> # Move right and down
-            >>> state = MouseInput(x=10, y=10)
-            >>> driver.send_mouse_input(state)
+            >>> input_data = MouseInput(x=10, y=10)
+            >>> driver.send_mouse_input(input_data)
             >>>
             >>> # Left button pressed while moving
-            >>> state = MouseInput(
+            >>> input_data = MouseInput(
             ...     buttons={MouseButton.BTN_LEFT},
             ...     x=5,
             ...     y=-5
             ... )
-            >>> driver.send_mouse_input(state)
+            >>> driver.send_mouse_input(input_data)
             >>>
             >>> # Multiple buttons with scroll
-            >>> state = MouseInput(
+            >>> input_data = MouseInput(
             ...     buttons={MouseButton.BTN_LEFT, MouseButton.BTN_RIGHT},
             ...     scroll=3
             ... )
-            >>> driver.send_mouse_input(state)
+            >>> driver.send_mouse_input(input_data)
             >>>
             >>> # Drag operation
             >>> # Press and hold
@@ -165,12 +165,12 @@ class CH9329Driver:
         """
         # Build button byte from evdev button codes
         button_byte = 0x00
-        for button in state.buttons:
+        for button in input_data.buttons:
             button_byte |= evdev_to_usb_hid_mouse(button.value)
 
         # Build packet using protocol
         packet = CH9329Protocol.build_mouse_rel_packet(
-            button_byte, state.x, state.y, state.scroll
+            button_byte, input_data.x, input_data.y, input_data.scroll
         )
         self._adapter.send(packet)
 

@@ -8,15 +8,15 @@ Basic usage:
     >>> from pych9329 import CH9329Driver, SerialAdapter, KeyboardInput, KeyCode
     >>> adapter = SerialAdapter("/dev/ttyUSB0", 9600)
     >>> driver = CH9329Driver(adapter)
-    >>> state = KeyboardInput(keys=[KeyCode.KEY_A])
-    >>> driver.send_keyboard_input(state)
+    >>> input_data = KeyboardInput(keys=[KeyCode.KEY_A])
+    >>> driver.send_keyboard_input(input_data)
     >>> driver.close()
 
 Context manager usage:
     >>> with SerialAdapter("/dev/ttyUSB0", 9600) as adapter:
     ...     with CH9329Driver(adapter) as driver:
-    ...         state = KeyboardInput(keys=[KeyCode.KEY_H, KeyCode.KEY_I])
-    ...         driver.send_keyboard_input(state)
+    ...         input_data = KeyboardInput(keys=[KeyCode.KEY_H, KeyCode.KEY_I])
+    ...         driver.send_keyboard_input(input_data)
 """
 
 from pych9329.adapter import CommunicationAdapter, SerialAdapter
