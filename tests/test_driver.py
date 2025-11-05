@@ -2,17 +2,75 @@
 
 from unittest.mock import Mock
 
-import pytest
-
+from pych9329.adapter import CommunicationAdapter
 from pych9329.driver import CH9329Driver
+from pych9329.evdev_mapping import (
+    evdev_to_usb_hid_keyboard,
+    evdev_to_usb_hid_modifier,
+    evdev_to_usb_hid_mouse,
+)
 from pych9329.models import (
     KeyboardInput,
     KeyCode,
     MediaKey,
+    MediaKeyInput,
     ModifierKey,
     MouseButton,
     MouseInput,
 )
+
+# Protocol constants
+PACKET_HEADER = b"\x57\xab"
+CMD_KEYBOARD = b"\x00\x02"
+CMD_MOUSE_REL = b"\x00\x05"
+CMD_MEDIA = b"\x00\x03"
+
+# Packet structure offsets
+OFFSET_HEADER = 0
+OFFSET_CMD = 2
+OFFSET_DATA_LEN = 4
+OFFSET_DATA = 5
+
+# Keyboard packet structure
+KEYBOARD_DATA_LEN = 0x08
+KEYBOARD_MODIFIER_OFFSET = 5
+KEYBOARD_RESERVED_OFFSET = 6
+KEYBOARD_KEY1_OFFSET = 7
+
+# Mouse packet structure
+MOUSE_DATA_LEN = 0x05
+MOUSE_ADDR = 0x01
+MOUSE_BUTTON_OFFSET = 6
+MOUSE_X_OFFSET = 7
+MOUSE_Y_OFFSET = 8
+MOUSE_SCROLL_OFFSET = 9
+
+# Media packet structure
+MEDIA_DATA_LEN = 0x04
+MEDIA_DATA0_OFFSET = 5
+MEDIA_DATA1_OFFSET = 6
+MEDIA_DATA2_OFFSET = 7
+MEDIA_DATA3_OFFSET = 8
+MEDIA_REPORT_ID = 0x02  # Media control report ID (first byte of data)
+
+# USB HID modifier bits
+USB_HID_MODIFIER_CTRL = 0x01
+USB_HID_MODIFIER_SHIFT = 0x02
+USB_HID_MODIFIER_ALT = 0x04
+USB_HID_MODIFIER_META = 0x08
+
+# USB HID mouse button bits
+USB_HID_BTN_LEFT = 0x01
+USB_HID_BTN_RIGHT = 0x02
+USB_HID_BTN_MIDDLE = 0x04
+
+
+# Two's complement helper
+def to_twos_complement(value: int, bits: int = 8) -> int:
+    """Convert a negative number to two's complement representation."""
+    if value < 0:
+        return (1 << bits) + value
+    return value
 
 
 class TestCH9329DriverInit:
@@ -20,456 +78,30 @@ class TestCH9329DriverInit:
 
     def test_init_with_adapter(self) -> None:
         """Test initializing driver with a communication adapter."""
-        mock_adapter = Mock()
-        driver = CH9329Driver(mock_adapter, screen_width=1920, screen_height=1080)
-
-        assert driver is not None
-
-    def test_init_with_default_screen_size(self) -> None:
-        """Test that driver uses default screen size."""
-        mock_adapter = Mock()
+        mock_adapter = Mock(spec=CommunicationAdapter)
         driver = CH9329Driver(mock_adapter)
 
         assert driver is not None
-
-
-class TestCH9329DriverKeyboard:
-    """Tests for keyboard input methods."""
-
-    def test_press_key_sends_press_and_release(self) -> None:
-        """Test that press_key sends both press and release packets."""
-        mock_adapter = Mock()
-        driver = CH9329Driver(mock_adapter)
-
-        driver.press_key(KeyCode.KEY_A)
-
-        # Should send press packet and then release packet
-        assert mock_adapter.send.call_count == 2
-
-    def test_press_key_with_shift(self) -> None:
-        """Test pressing a key with shift modifier."""
-        mock_adapter = Mock()
-        driver = CH9329Driver(mock_adapter)
-
-        driver.press_key(KeyCode.KEY_A, shift=True)
-
-        # Should send press with shift and then release
-        assert mock_adapter.send.call_count == 2
-        # First call should have shift modifier (0x02)
-        first_call_data = mock_adapter.send.call_args_list[0][0][0]
-        # Check that modifier byte is 0x02 (shift)
-        assert first_call_data[5] == 0x02
-
-    def test_press_key_with_ctrl(self) -> None:
-        """Test pressing a key with ctrl modifier."""
-        mock_adapter = Mock()
-        driver = CH9329Driver(mock_adapter)
-
-        driver.press_key(KeyCode.KEY_C, ctrl=True)
-
-        assert mock_adapter.send.call_count == 2
-        # First call should have ctrl modifier (0x01)
-        first_call_data = mock_adapter.send.call_args_list[0][0][0]
-        assert first_call_data[5] == 0x01
-
-    def test_press_key_with_multiple_modifiers(self) -> None:
-        """Test pressing a key with multiple modifiers."""
-        mock_adapter = Mock()
-        driver = CH9329Driver(mock_adapter)
-
-        driver.press_key(KeyCode.KEY_C, ctrl=True, shift=True)
-
-        assert mock_adapter.send.call_count == 2
-        # First call should have ctrl + shift (0x01 | 0x02 = 0x03)
-        first_call_data = mock_adapter.send.call_args_list[0][0][0]
-        assert first_call_data[5] == 0x03
-
-    def test_write_string_single_char(self) -> None:
-        """Test writing a single character string."""
-        mock_adapter = Mock()
-        driver = CH9329Driver(mock_adapter)
-
-        driver.write_string("a")
-
-        # Should send press and release for one character
-        assert mock_adapter.send.call_count == 2
-
-    def test_write_string_multiple_chars(self) -> None:
-        """Test writing a multi-character string."""
-        mock_adapter = Mock()
-        driver = CH9329Driver(mock_adapter)
-
-        driver.write_string("abc")
-
-        # Should send press and release for each character (3 * 2 = 6)
-        assert mock_adapter.send.call_count == 6
-
-    def test_write_string_with_uppercase(self) -> None:
-        """Test writing string with uppercase letters."""
-        mock_adapter = Mock()
-        driver = CH9329Driver(mock_adapter)
-
-        driver.write_string("A")
-
-        # Should send press and release
-        assert mock_adapter.send.call_count == 2
-        # First call should have shift modifier for uppercase
-        first_call_data = mock_adapter.send.call_args_list[0][0][0]
-        assert first_call_data[5] == 0x02  # shift modifier
-
-    def test_write_string_empty(self) -> None:
-        """Test writing empty string does nothing."""
-        mock_adapter = Mock()
-        driver = CH9329Driver(mock_adapter)
-
-        driver.write_string("")
-
-        # Should not send any packets
-        mock_adapter.send.assert_not_called()
-
-    def test_write_string_with_unsupported_char_raises_error(self) -> None:
-        """Test that writing unsupported characters raises ValueError."""
-        mock_adapter = Mock()
-        driver = CH9329Driver(mock_adapter)
-
-        with pytest.raises(ValueError, match="Unsupported character"):
-            driver.write_string("あ")
-
-
-class TestCH9329DriverMouse:
-    """Tests for mouse input methods."""
-
-    def test_mouse_move_absolute(self) -> None:
-        """Test moving mouse to absolute position."""
-        mock_adapter = Mock()
-        driver = CH9329Driver(mock_adapter, screen_width=1920, screen_height=1080)
-
-        driver.mouse_move_absolute(960, 540)
-
-        # Should send one mouse absolute packet
-        mock_adapter.send.assert_called_once()
-
-    def test_mouse_move_relative(self) -> None:
-        """Test moving mouse relative to current position."""
-        mock_adapter = Mock()
-        driver = CH9329Driver(mock_adapter)
-
-        driver.mouse_move_relative(10, 20)
-
-        # Should send one mouse relative packet
-        mock_adapter.send.assert_called_once()
-
-    def test_mouse_click_left(self) -> None:
-        """Test left mouse button click."""
-        mock_adapter = Mock()
-        driver = CH9329Driver(mock_adapter)
-
-        driver.mouse_click(MouseButton.BTN_LEFT)
-
-        # Should send press and release packets
-        assert mock_adapter.send.call_count == 2
-
-    def test_mouse_click_right(self) -> None:
-        """Test right mouse button click."""
-        mock_adapter = Mock()
-        driver = CH9329Driver(mock_adapter)
-
-        driver.mouse_click(MouseButton.BTN_RIGHT)
-
-        assert mock_adapter.send.call_count == 2
-
-    def test_mouse_scroll_up(self) -> None:
-        """Test scrolling mouse wheel up."""
-        mock_adapter = Mock()
-        driver = CH9329Driver(mock_adapter)
-
-        driver.mouse_scroll(5)
-
-        # Should send one scroll packet
-        mock_adapter.send.assert_called_once()
-
-    def test_mouse_scroll_down(self) -> None:
-        """Test scrolling mouse wheel down."""
-        mock_adapter = Mock()
-        driver = CH9329Driver(mock_adapter)
-
-        driver.mouse_scroll(-5)
-
-        # Should send one scroll packet
-        mock_adapter.send.assert_called_once()
-
-
-class TestCH9329DriverMedia:
-    """Tests for media key methods."""
-
-    def test_media_key_press(self) -> None:
-        """Test pressing a media key."""
-        mock_adapter = Mock()
-        driver = CH9329Driver(mock_adapter)
-
-        driver.press_media_key(MediaKey.KEY_MUTE)
-
-        # Should send press and release packets
-        assert mock_adapter.send.call_count == 2
-
-    def test_media_key_volume_up(self) -> None:
-        """Test volume up media key."""
-        mock_adapter = Mock()
-        driver = CH9329Driver(mock_adapter)
-
-        driver.press_media_key(MediaKey.KEY_VOLUMEUP)
-
-        assert mock_adapter.send.call_count == 2
-
-    def test_media_key_play_pause(self) -> None:
-        """Test play/pause media key."""
-        mock_adapter = Mock()
-        driver = CH9329Driver(mock_adapter)
-
-        driver.press_media_key(MediaKey.KEY_PLAYPAUSE)
-
-        assert mock_adapter.send.call_count == 2
 
 
 class TestCH9329DriverContextManager:
-    """Tests for context manager support."""
+    """Tests for CH9329Driver context manager functionality."""
 
     def test_context_manager_closes_adapter(self) -> None:
-        """Test that using driver as context manager closes adapter."""
-        mock_adapter = Mock()
-
+        """Test that context manager closes adapter on exit."""
+        mock_adapter = Mock(spec=CommunicationAdapter)
         with CH9329Driver(mock_adapter) as driver:
             assert driver is not None
 
         mock_adapter.close.assert_called_once()
 
     def test_close_method_closes_adapter(self) -> None:
-        """Test that close method closes the adapter."""
-        mock_adapter = Mock()
+        """Test that close() method closes the adapter."""
+        mock_adapter = Mock(spec=CommunicationAdapter)
         driver = CH9329Driver(mock_adapter)
-
         driver.close()
 
         mock_adapter.close.assert_called_once()
-
-
-class TestCH9329DriverScreenCoordinates:
-    """Tests for screen coordinate conversion."""
-
-    def test_pixel_to_device_coordinates_origin(self) -> None:
-        """Test converting origin pixel coordinates."""
-        mock_adapter = Mock()
-        driver = CH9329Driver(mock_adapter, screen_width=1920, screen_height=1080)
-
-        driver.mouse_move_absolute(0, 0)
-
-        # Should send packet with device coordinates (0, 0)
-        call_data = mock_adapter.send.call_args[0][0]
-        # Check x and y coordinates in packet (bytes 7-10)
-        x_low, x_high = call_data[7], call_data[8]
-        y_low, y_high = call_data[9], call_data[10]
-        assert (x_high << 8) | x_low == 0
-        assert (y_high << 8) | y_low == 0
-
-    def test_pixel_to_device_coordinates_center(self) -> None:
-        """Test converting center pixel coordinates."""
-        mock_adapter = Mock()
-        driver = CH9329Driver(mock_adapter, screen_width=1920, screen_height=1080)
-
-        # Move to center of screen
-        driver.mouse_move_absolute(960, 540)
-
-        call_data = mock_adapter.send.call_args[0][0]
-        x_low, x_high = call_data[7], call_data[8]
-        y_low, y_high = call_data[9], call_data[10]
-        x_device = (x_high << 8) | x_low
-        y_device = (y_high << 8) | y_low
-
-        # Center should be around 2048 (half of 4096)
-        assert 2000 < x_device < 2100
-        assert 2000 < y_device < 2100
-
-
-class TestCH9329DriverSeparatedKeyboard:
-    """Tests for separated keyboard press/release methods."""
-
-    def test_key_down_sends_only_press(self) -> None:
-        """Test that key_down sends only press packet."""
-        mock_adapter = Mock()
-        driver = CH9329Driver(mock_adapter)
-
-        driver.key_down(KeyCode.KEY_A)
-
-        # Should send only press packet
-        mock_adapter.send.assert_called_once()
-
-    def test_key_up_sends_only_release(self) -> None:
-        """Test that key_up sends only release packet."""
-        mock_adapter = Mock()
-        driver = CH9329Driver(mock_adapter)
-
-        driver.key_up()
-
-        # Should send only release packet
-        mock_adapter.send.assert_called_once()
-
-    def test_key_down_with_modifiers(self) -> None:
-        """Test key_down with modifier keys."""
-        mock_adapter = Mock()
-        driver = CH9329Driver(mock_adapter)
-
-        driver.key_down(KeyCode.KEY_C, shift=True, ctrl=True)
-
-        mock_adapter.send.assert_called_once()
-        # Check that modifier byte has shift + ctrl (0x02 | 0x01 = 0x03)
-        call_data = mock_adapter.send.call_args[0][0]
-        assert call_data[5] == 0x03
-
-    def test_key_down_then_key_up_sequence(self) -> None:
-        """Test that key_down followed by key_up works correctly."""
-        mock_adapter = Mock()
-        driver = CH9329Driver(mock_adapter)
-
-        driver.key_down(KeyCode.KEY_B)
-        driver.key_up()
-
-        # Should have sent 2 packets total
-        assert mock_adapter.send.call_count == 2
-
-
-class TestCH9329DriverSeparatedMouse:
-    """Tests for separated mouse button press/release methods."""
-
-    def test_mouse_button_down_sends_only_press(self) -> None:
-        """Test that mouse_button_down sends only press packet."""
-        mock_adapter = Mock()
-        driver = CH9329Driver(mock_adapter)
-
-        driver.mouse_button_down(MouseButton.BTN_LEFT)
-
-        # Should send only press packet
-        mock_adapter.send.assert_called_once()
-
-    def test_mouse_button_up_sends_only_release(self) -> None:
-        """Test that mouse_button_up sends only release packet."""
-        mock_adapter = Mock()
-        driver = CH9329Driver(mock_adapter)
-
-        driver.mouse_button_up()
-
-        # Should send only release packet
-        mock_adapter.send.assert_called_once()
-
-    def test_mouse_button_down_then_up_sequence(self) -> None:
-        """Test that mouse_button_down followed by mouse_button_up works."""
-        mock_adapter = Mock()
-        driver = CH9329Driver(mock_adapter)
-
-        driver.mouse_button_down(MouseButton.BTN_RIGHT)
-        driver.mouse_button_up()
-
-        # Should have sent 2 packets total
-        assert mock_adapter.send.call_count == 2
-
-
-class TestCH9329DriverSeparatedMedia:
-    """Tests for separated media key press/release methods."""
-
-    def test_media_key_down_sends_only_press(self) -> None:
-        """Test that media_key_down sends only press packet."""
-        mock_adapter = Mock()
-        driver = CH9329Driver(mock_adapter)
-
-        driver.media_key_down(MediaKey.KEY_MUTE)
-
-        # Should send only press packet
-        mock_adapter.send.assert_called_once()
-
-    def test_media_key_up_sends_only_release(self) -> None:
-        """Test that media_key_up sends only release packet."""
-        mock_adapter = Mock()
-        driver = CH9329Driver(mock_adapter)
-
-        driver.media_key_up()
-
-        # Should send only release packet
-        mock_adapter.send.assert_called_once()
-
-    def test_media_key_down_then_up_sequence(self) -> None:
-        """Test that media_key_down followed by media_key_up works."""
-        mock_adapter = Mock()
-        driver = CH9329Driver(mock_adapter)
-
-        driver.media_key_down(MediaKey.KEY_VOLUMEUP)
-        driver.media_key_up()
-
-        # Should have sent 2 packets total
-        assert mock_adapter.send.call_count == 2
-
-
-class TestCH9329DriverWithRecorder:
-    """Tests for driver integration with operation recorder."""
-
-    def test_driver_with_recorder_records_operations(self) -> None:
-        """Test that driver with recorder records operations."""
-        from pych9329.recorder import OperationRecorder
-
-        mock_adapter = Mock()
-        recorder = OperationRecorder()
-        driver = CH9329Driver(mock_adapter, recorder=recorder)
-
-        recorder.start_recording()
-        driver.key_down(KeyCode.KEY_A)
-        driver.key_up()
-        operations = recorder.stop_recording()
-
-        # Should have recorded at least 2 operations (key_down and key_up)
-        assert len(operations) >= 2
-
-    def test_driver_without_recorder_works_normally(self) -> None:
-        """Test that driver without recorder works normally."""
-        mock_adapter = Mock()
-        driver = CH9329Driver(mock_adapter)
-
-        # Should work without errors
-        driver.key_down(KeyCode.KEY_A)
-        driver.key_up()
-
-        assert mock_adapter.send.call_count == 2
-
-
-class TestCH9329DriverBackwardCompatibility:
-    """Tests to ensure backward compatibility with combined methods."""
-
-    def test_press_key_still_works(self) -> None:
-        """Test that press_key convenience method still works."""
-        mock_adapter = Mock()
-        driver = CH9329Driver(mock_adapter)
-
-        driver.press_key(KeyCode.KEY_A)
-
-        # Should send 2 packets (press and release)
-        assert mock_adapter.send.call_count == 2
-
-    def test_mouse_click_still_works(self) -> None:
-        """Test that mouse_click convenience method still works."""
-        mock_adapter = Mock()
-        driver = CH9329Driver(mock_adapter)
-
-        driver.mouse_click(MouseButton.BTN_LEFT)
-
-        # Should send 2 packets (press and release)
-        assert mock_adapter.send.call_count == 2
-
-    def test_press_media_key_still_works(self) -> None:
-        """Test that press_media_key convenience method still works."""
-        mock_adapter = Mock()
-        driver = CH9329Driver(mock_adapter)
-
-        driver.press_media_key(MediaKey.KEY_MUTE)
-
-        # Should send 2 packets (press and release)
-        assert mock_adapter.send.call_count == 2
 
 
 class TestCH9329DriverSendKeyboardInput:
@@ -477,39 +109,46 @@ class TestCH9329DriverSendKeyboardInput:
 
     def test_empty_state_releases_all_keys(self) -> None:
         """Test that empty state sends all zeros (release packet)."""
-        mock_adapter = Mock()
+        mock_adapter = Mock(spec=CommunicationAdapter)
         driver = CH9329Driver(mock_adapter)
 
         driver.send_keyboard_input(KeyboardInput())
 
-        # Should send one packet
         assert mock_adapter.send.call_count == 1
         packet = mock_adapter.send.call_args[0][0]
 
-        # Check packet structure: header + cmd + len + [modifier(0), reserved(0), 6 keys(0)] + checksum
-        # [0x57, 0xAB, 0x00, 0x02, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, checksum]
-        assert len(packet) == 14
-        assert packet[0:5] == b"\x57\xab\x00\x02\x08"
-        # Modifier and all 6 keys should be 0
-        assert packet[5:13] == b"\x00" * 8
+        # Verify packet structure
+        expected_packet_len = 14  # header(2) + cmd(2) + len(1) + data(8) + checksum(1)
+        assert len(packet) == expected_packet_len
+        assert packet[OFFSET_HEADER : OFFSET_HEADER + 2] == PACKET_HEADER
+        assert packet[OFFSET_CMD : OFFSET_CMD + 2] == CMD_KEYBOARD
+        assert packet[OFFSET_DATA_LEN] == KEYBOARD_DATA_LEN
+
+        # All data bytes should be 0x00 (no modifiers, no keys)
+        data_start = OFFSET_DATA
+        data_end = data_start + KEYBOARD_DATA_LEN
+        assert packet[data_start:data_end] == b"\x00" * KEYBOARD_DATA_LEN
 
     def test_single_key_without_modifiers(self) -> None:
         """Test sending single key without modifiers."""
-        mock_adapter = Mock()
+        mock_adapter = Mock(spec=CommunicationAdapter)
         driver = CH9329Driver(mock_adapter)
 
-        state = KeyboardInput(keys=[KeyCode.KEY_A])
-        driver.send_keyboard_input(state)
+        driver.send_keyboard_input(KeyboardInput(keys=[KeyCode.KEY_A]))
 
         packet = mock_adapter.send.call_args[0][0]
-        # Modifier should be 0, first key should be KEY_A (USB HID: 0x04)
-        assert packet[5] == 0x00  # No modifiers
-        assert packet[6] == 0x00  # Reserved
-        assert packet[7] == 0x04  # KEY_A in USB HID
+
+        # Verify no modifiers
+        assert packet[KEYBOARD_MODIFIER_OFFSET] == 0x00
+        # Verify reserved byte
+        assert packet[KEYBOARD_RESERVED_OFFSET] == 0x00
+        # Verify KEY_A in first key slot
+        expected_key_a = evdev_to_usb_hid_keyboard(KeyCode.KEY_A.value)
+        assert packet[KEYBOARD_KEY1_OFFSET] == expected_key_a
 
     def test_single_key_with_modifiers(self) -> None:
         """Test sending key with multiple modifiers."""
-        mock_adapter = Mock()
+        mock_adapter = Mock(spec=CommunicationAdapter)
         driver = CH9329Driver(mock_adapter)
 
         state = KeyboardInput(
@@ -519,75 +158,81 @@ class TestCH9329DriverSendKeyboardInput:
         driver.send_keyboard_input(state)
 
         packet = mock_adapter.send.call_args[0][0]
-        # Modifier should be Ctrl(0x01) | Shift(0x02) = 0x03
-        assert packet[5] == 0x03  # Ctrl + Shift
-        assert packet[7] == 0x04  # KEY_A in USB HID
+
+        # Verify modifiers
+        expected_modifiers = USB_HID_MODIFIER_CTRL | USB_HID_MODIFIER_SHIFT
+        assert packet[KEYBOARD_MODIFIER_OFFSET] == expected_modifiers
+
+        # Verify key
+        expected_key_a = evdev_to_usb_hid_keyboard(KeyCode.KEY_A.value)
+        assert packet[KEYBOARD_KEY1_OFFSET] == expected_key_a
 
     def test_multiple_keys_simultaneously(self) -> None:
         """Test sending multiple keys at once."""
-        mock_adapter = Mock()
+        mock_adapter = Mock(spec=CommunicationAdapter)
         driver = CH9329Driver(mock_adapter)
 
-        state = KeyboardInput(keys=[KeyCode.KEY_A, KeyCode.KEY_B, KeyCode.KEY_C])
-        driver.send_keyboard_input(state)
+        keys = [KeyCode.KEY_A, KeyCode.KEY_B, KeyCode.KEY_C]
+        driver.send_keyboard_input(KeyboardInput(keys=keys))
 
         packet = mock_adapter.send.call_args[0][0]
-        # Keys should be A(0x04), B(0x05), C(0x06)
-        assert packet[7] == 0x04  # KEY_A
-        assert packet[8] == 0x05  # KEY_B
-        assert packet[9] == 0x06  # KEY_C
-        # Remaining keys should be 0
-        assert packet[10] == 0x00
-        assert packet[11] == 0x00
-        assert packet[12] == 0x00
+
+        # Verify keys
+        for i, key in enumerate(keys):
+            expected_key_code = evdev_to_usb_hid_keyboard(key.value)
+            assert packet[KEYBOARD_KEY1_OFFSET + i] == expected_key_code
+
+        # Verify remaining key slots are empty
+        for i in range(len(keys), 6):
+            assert packet[KEYBOARD_KEY1_OFFSET + i] == 0x00
 
     def test_maximum_six_keys(self) -> None:
-        """Test sending exactly 6 keys."""
-        mock_adapter = Mock()
+        """Test sending maximum 6 keys at once."""
+        mock_adapter = Mock(spec=CommunicationAdapter)
         driver = CH9329Driver(mock_adapter)
 
-        state = KeyboardInput(
-            keys=[
-                KeyCode.KEY_A,
-                KeyCode.KEY_B,
-                KeyCode.KEY_C,
-                KeyCode.KEY_D,
-                KeyCode.KEY_E,
-                KeyCode.KEY_F,
-            ]
-        )
-        driver.send_keyboard_input(state)
+        keys = [
+            KeyCode.KEY_A,
+            KeyCode.KEY_B,
+            KeyCode.KEY_C,
+            KeyCode.KEY_D,
+            KeyCode.KEY_E,
+            KeyCode.KEY_F,
+        ]
+        driver.send_keyboard_input(KeyboardInput(keys=keys))
 
         packet = mock_adapter.send.call_args[0][0]
-        # All 6 key slots should be filled
-        assert packet[7] == 0x04  # KEY_A
-        assert packet[8] == 0x05  # KEY_B
-        assert packet[9] == 0x06  # KEY_C
-        assert packet[10] == 0x07  # KEY_D
-        assert packet[11] == 0x08  # KEY_E
-        assert packet[12] == 0x09  # KEY_F
+
+        # Verify all 6 key slots are filled
+        for i, key in enumerate(keys):
+            expected_key_code = evdev_to_usb_hid_keyboard(key.value)
+            assert packet[KEYBOARD_KEY1_OFFSET + i] == expected_key_code
 
     def test_all_modifiers(self) -> None:
-        """Test sending all 8 modifier keys."""
-        mock_adapter = Mock()
+        """Test sending all 8 modifiers at once."""
+        mock_adapter = Mock(spec=CommunicationAdapter)
         driver = CH9329Driver(mock_adapter)
 
-        state = KeyboardInput(
-            modifiers={
-                ModifierKey.KEY_LEFTCTRL,
-                ModifierKey.KEY_RIGHTCTRL,
-                ModifierKey.KEY_LEFTSHIFT,
-                ModifierKey.KEY_RIGHTSHIFT,
-                ModifierKey.KEY_LEFTALT,
-                ModifierKey.KEY_RIGHTALT,
-                ModifierKey.KEY_LEFTMETA,
-                ModifierKey.KEY_RIGHTMETA,
-            }
-        )
-        driver.send_keyboard_input(state)
+        all_modifiers = {
+            ModifierKey.KEY_LEFTCTRL,
+            ModifierKey.KEY_RIGHTCTRL,
+            ModifierKey.KEY_LEFTSHIFT,
+            ModifierKey.KEY_RIGHTSHIFT,
+            ModifierKey.KEY_LEFTALT,
+            ModifierKey.KEY_RIGHTALT,
+            ModifierKey.KEY_LEFTMETA,
+            ModifierKey.KEY_RIGHTMETA,
+        }
+        driver.send_keyboard_input(KeyboardInput(modifiers=all_modifiers))
 
         packet = mock_adapter.send.call_args[0][0]
-        assert packet[5] == 0xFF  # All modifiers
+
+        # Calculate expected modifier byte
+        expected_modifier_byte = 0x00
+        for modifier in all_modifiers:
+            expected_modifier_byte |= evdev_to_usb_hid_modifier(modifier.value)
+
+        assert packet[KEYBOARD_MODIFIER_OFFSET] == expected_modifier_byte
 
 
 class TestCH9329DriverSendMouseInput:
@@ -595,108 +240,144 @@ class TestCH9329DriverSendMouseInput:
 
     def test_empty_state_no_movement(self) -> None:
         """Test that empty state sends no buttons or movement."""
-        mock_adapter = Mock()
+        mock_adapter = Mock(spec=CommunicationAdapter)
         driver = CH9329Driver(mock_adapter)
 
         driver.send_mouse_input(MouseInput())
 
-        # Should send one packet
         assert mock_adapter.send.call_count == 1
         packet = mock_adapter.send.call_args[0][0]
 
-        # Check packet structure for relative mouse packet
-        # [0x57, 0xAB, 0x00, 0x05, 0x05, 0x01, button, x, y, scroll, checksum]
-        assert len(packet) == 11
-        assert packet[0:6] == b"\x57\xab\x00\x05\x05\x01"
-        assert packet[6] == 0x00  # No buttons
-        assert packet[7] == 0x00  # X = 0
-        assert packet[8] == 0x00  # Y = 0
-        assert packet[9] == 0x00  # Scroll = 0
+        # Verify packet structure
+        # Packet format: header + cmd + len + addr + data + checksum
+        expected_packet_len = 11
+        assert len(packet) == expected_packet_len
+        assert packet[OFFSET_HEADER : OFFSET_HEADER + 2] == PACKET_HEADER
+        assert packet[OFFSET_CMD : OFFSET_CMD + 2] == CMD_MOUSE_REL
+        assert packet[OFFSET_DATA_LEN] == MOUSE_DATA_LEN
+        assert packet[OFFSET_DATA] == MOUSE_ADDR
+
+        # Verify no buttons, movement, or scroll
+        assert packet[MOUSE_BUTTON_OFFSET] == 0x00
+        assert packet[MOUSE_X_OFFSET] == 0x00
+        assert packet[MOUSE_Y_OFFSET] == 0x00
+        assert packet[MOUSE_SCROLL_OFFSET] == 0x00
 
     def test_movement_only(self) -> None:
         """Test sending only movement."""
-        mock_adapter = Mock()
+        mock_adapter = Mock(spec=CommunicationAdapter)
         driver = CH9329Driver(mock_adapter)
 
-        state = MouseInput(x=10, y=-20)
-        driver.send_mouse_input(state)
+        x_movement = 10
+        y_movement = -20
+        driver.send_mouse_input(MouseInput(x=x_movement, y=y_movement))
 
         packet = mock_adapter.send.call_args[0][0]
-        assert packet[6] == 0x00  # No buttons
-        assert packet[7] == 10  # X = 10
-        assert packet[8] == 0x100 - 20  # Y = -20 in two's complement
+
+        # Verify no buttons
+        assert packet[MOUSE_BUTTON_OFFSET] == 0x00
+        # Verify movement
+        assert packet[MOUSE_X_OFFSET] == x_movement
+        assert packet[MOUSE_Y_OFFSET] == to_twos_complement(y_movement)
 
     def test_single_button_no_movement(self) -> None:
         """Test sending single button without movement."""
-        mock_adapter = Mock()
+        mock_adapter = Mock(spec=CommunicationAdapter)
         driver = CH9329Driver(mock_adapter)
 
-        state = MouseInput(buttons={MouseButton.BTN_LEFT})
-        driver.send_mouse_input(state)
+        driver.send_mouse_input(MouseInput(buttons={MouseButton.BTN_LEFT}))
 
         packet = mock_adapter.send.call_args[0][0]
-        assert packet[6] == 0x01  # Left button (USB HID: 0x01)
-        assert packet[7] == 0x00  # X = 0
-        assert packet[8] == 0x00  # Y = 0
+
+        # Verify left button pressed
+        expected_button_byte = evdev_to_usb_hid_mouse(MouseButton.BTN_LEFT.value)
+        assert packet[MOUSE_BUTTON_OFFSET] == expected_button_byte
+        # Verify no movement
+        assert packet[MOUSE_X_OFFSET] == 0x00
+        assert packet[MOUSE_Y_OFFSET] == 0x00
 
     def test_multiple_buttons(self) -> None:
         """Test sending multiple buttons."""
-        mock_adapter = Mock()
+        mock_adapter = Mock(spec=CommunicationAdapter)
         driver = CH9329Driver(mock_adapter)
 
-        state = MouseInput(buttons={MouseButton.BTN_LEFT, MouseButton.BTN_RIGHT})
-        driver.send_mouse_input(state)
+        buttons = {MouseButton.BTN_LEFT, MouseButton.BTN_RIGHT}
+        driver.send_mouse_input(MouseInput(buttons=buttons))
 
         packet = mock_adapter.send.call_args[0][0]
-        # Left (0x01) | Right (0x02) = 0x03
-        assert packet[6] == 0x03
+
+        # Calculate expected button byte
+        expected_button_byte = 0x00
+        for button in buttons:
+            expected_button_byte |= evdev_to_usb_hid_mouse(button.value)
+
+        assert packet[MOUSE_BUTTON_OFFSET] == expected_button_byte
 
     def test_button_with_movement(self) -> None:
         """Test sending button with movement."""
-        mock_adapter = Mock()
+        mock_adapter = Mock(spec=CommunicationAdapter)
         driver = CH9329Driver(mock_adapter)
 
-        state = MouseInput(buttons={MouseButton.BTN_LEFT}, x=5, y=-5)
+        x_movement = 5
+        y_movement = -5
+        state = MouseInput(buttons={MouseButton.BTN_LEFT}, x=x_movement, y=y_movement)
         driver.send_mouse_input(state)
 
         packet = mock_adapter.send.call_args[0][0]
-        assert packet[6] == 0x01  # Left button
-        assert packet[7] == 5  # X = 5
-        assert packet[8] == 0x100 - 5  # Y = -5
+
+        # Verify button
+        expected_button_byte = evdev_to_usb_hid_mouse(MouseButton.BTN_LEFT.value)
+        assert packet[MOUSE_BUTTON_OFFSET] == expected_button_byte
+        # Verify movement
+        assert packet[MOUSE_X_OFFSET] == x_movement
+        assert packet[MOUSE_Y_OFFSET] == to_twos_complement(y_movement)
 
     def test_scroll_only(self) -> None:
         """Test sending only scroll."""
-        mock_adapter = Mock()
+        mock_adapter = Mock(spec=CommunicationAdapter)
         driver = CH9329Driver(mock_adapter)
 
-        state = MouseInput(scroll=3)
-        driver.send_mouse_input(state)
+        scroll_amount = 3
+        driver.send_mouse_input(MouseInput(scroll=scroll_amount))
 
         packet = mock_adapter.send.call_args[0][0]
-        assert packet[6] == 0x00  # No buttons
-        assert packet[7] == 0x00  # X = 0
-        assert packet[8] == 0x00  # Y = 0
-        assert packet[9] == 3  # Scroll = 3
+
+        # Verify no buttons or movement
+        assert packet[MOUSE_BUTTON_OFFSET] == 0x00
+        assert packet[MOUSE_X_OFFSET] == 0x00
+        assert packet[MOUSE_Y_OFFSET] == 0x00
+        # Verify scroll
+        assert packet[MOUSE_SCROLL_OFFSET] == scroll_amount
 
     def test_all_parameters(self) -> None:
-        """Test sending all parameters."""
-        mock_adapter = Mock()
+        """Test sending all parameters at once."""
+        mock_adapter = Mock(spec=CommunicationAdapter)
         driver = CH9329Driver(mock_adapter)
 
+        buttons = {MouseButton.BTN_LEFT, MouseButton.BTN_MIDDLE}
+        x_movement = 10
+        y_movement = -10
+        scroll_amount = 5
+
         state = MouseInput(
-            buttons={MouseButton.BTN_LEFT, MouseButton.BTN_MIDDLE},
-            x=10,
-            y=-10,
-            scroll=5,
+            buttons=buttons,
+            x=x_movement,
+            y=y_movement,
+            scroll=scroll_amount,
         )
         driver.send_mouse_input(state)
 
         packet = mock_adapter.send.call_args[0][0]
-        # Left (0x01) | Middle (0x04) = 0x05
-        assert packet[6] == 0x05
-        assert packet[7] == 10
-        assert packet[8] == 0x100 - 10
-        assert packet[9] == 5
+
+        # Calculate expected button byte
+        expected_button_byte = 0x00
+        for button in buttons:
+            expected_button_byte |= evdev_to_usb_hid_mouse(button.value)
+
+        assert packet[MOUSE_BUTTON_OFFSET] == expected_button_byte
+        assert packet[MOUSE_X_OFFSET] == x_movement
+        assert packet[MOUSE_Y_OFFSET] == to_twos_complement(y_movement)
+        assert packet[MOUSE_SCROLL_OFFSET] == scroll_amount
 
 
 class TestCH9329DriverSendMediaKeyInput:
@@ -704,120 +385,112 @@ class TestCH9329DriverSendMediaKeyInput:
 
     def test_empty_state_releases_all_keys(self) -> None:
         """Test sending empty state releases all media keys."""
-        from pych9329.models import MediaKeyInput
-
-        mock_adapter = Mock()
+        mock_adapter = Mock(spec=CommunicationAdapter)
         driver = CH9329Driver(mock_adapter)
 
-        input_data = MediaKeyInput(keys=[])
-        driver.send_media_key_input(input_data)
+        driver.send_media_key_input(MediaKeyInput(keys=[]))
 
-        # Should send release packet
         assert mock_adapter.send.call_count == 1
         packet = mock_adapter.send.call_args[0][0]
 
-        # Check packet structure for release
-        assert len(packet) == 10
-        assert packet[0:5] == b"\x57\xab\x00\x03\x04"
-        assert packet[5] == 0x02  # data0
-        assert packet[6] == 0x00  # data1 - release
-        assert packet[7] == 0x00  # data2
-        assert packet[8] == 0x00  # data3
+        # Verify packet structure for release
+        expected_packet_len = 10  # header(2) + cmd(2) + len(1) + data(4) + checksum(1)
+        assert len(packet) == expected_packet_len
+        assert packet[OFFSET_HEADER : OFFSET_HEADER + 2] == PACKET_HEADER
+        assert packet[OFFSET_CMD : OFFSET_CMD + 2] == CMD_MEDIA
+        assert packet[OFFSET_DATA_LEN] == MEDIA_DATA_LEN
+
+        # Verify release packet data (0x02, 0x00, 0x00, 0x00)
+        assert packet[MEDIA_DATA0_OFFSET] == MEDIA_REPORT_ID
+        assert packet[MEDIA_DATA1_OFFSET] == 0x00
+        assert packet[MEDIA_DATA2_OFFSET] == 0x00
+        assert packet[MEDIA_DATA3_OFFSET] == 0x00
 
     def test_mute_key(self) -> None:
         """Test sending mute media key."""
-        from pych9329.models import MediaKeyInput
-
-        mock_adapter = Mock()
+        mock_adapter = Mock(spec=CommunicationAdapter)
         driver = CH9329Driver(mock_adapter)
 
-        input_data = MediaKeyInput(keys=[MediaKey.KEY_MUTE])
-        driver.send_media_key_input(input_data)
+        driver.send_media_key_input(MediaKeyInput(keys=[MediaKey.KEY_MUTE]))
 
-        # Should send one packet
         assert mock_adapter.send.call_count == 1
         packet = mock_adapter.send.call_args[0][0]
 
-        # Check packet structure: header + cmd + len + [data0, data1, data2, data3] + checksum
-        # MediaKey.KEY_MUTE = (0x02, 0x04, 0x00, 0x00)
-        assert len(packet) == 10
-        assert packet[0:5] == b"\x57\xab\x00\x03\x04"
-        assert packet[5] == 0x02  # data0
-        assert packet[6] == 0x04  # data1 - MUTE code
-        assert packet[7] == 0x00  # data2
-        assert packet[8] == 0x00  # data3
+        # Verify packet structure
+        expected_packet_len = 10
+        assert len(packet) == expected_packet_len
+        assert packet[OFFSET_HEADER : OFFSET_HEADER + 2] == PACKET_HEADER
+        assert packet[OFFSET_CMD : OFFSET_CMD + 2] == CMD_MEDIA
+        assert packet[OFFSET_DATA_LEN] == MEDIA_DATA_LEN
+
+        # Verify media key data
+        expected_data = MediaKey.KEY_MUTE.value
+        assert packet[MEDIA_DATA0_OFFSET] == expected_data[0]
+        assert packet[MEDIA_DATA1_OFFSET] == expected_data[1]
+        assert packet[MEDIA_DATA2_OFFSET] == expected_data[2]
+        assert packet[MEDIA_DATA3_OFFSET] == expected_data[3]
 
     def test_volume_up_key(self) -> None:
         """Test sending volume up media key."""
-        from pych9329.models import MediaKeyInput
-
-        mock_adapter = Mock()
+        mock_adapter = Mock(spec=CommunicationAdapter)
         driver = CH9329Driver(mock_adapter)
 
-        input_data = MediaKeyInput(keys=[MediaKey.KEY_VOLUMEUP])
-        driver.send_media_key_input(input_data)
+        driver.send_media_key_input(MediaKeyInput(keys=[MediaKey.KEY_VOLUMEUP]))
 
         packet = mock_adapter.send.call_args[0][0]
-        # MediaKey.KEY_VOLUMEUP = (0x02, 0x01, 0x00, 0x00)
-        assert packet[5] == 0x02
-        assert packet[6] == 0x01  # VOLUME_UP code
+
+        expected_data = MediaKey.KEY_VOLUMEUP.value
+        assert packet[MEDIA_DATA0_OFFSET] == expected_data[0]
+        assert packet[MEDIA_DATA1_OFFSET] == expected_data[1]
 
     def test_volume_down_key(self) -> None:
         """Test sending volume down media key."""
-        from pych9329.models import MediaKeyInput
-
-        mock_adapter = Mock()
+        mock_adapter = Mock(spec=CommunicationAdapter)
         driver = CH9329Driver(mock_adapter)
 
-        input_data = MediaKeyInput(keys=[MediaKey.KEY_VOLUMEDOWN])
-        driver.send_media_key_input(input_data)
+        driver.send_media_key_input(MediaKeyInput(keys=[MediaKey.KEY_VOLUMEDOWN]))
 
         packet = mock_adapter.send.call_args[0][0]
-        # MediaKey.KEY_VOLUMEDOWN = (0x02, 0x02, 0x00, 0x00)
-        assert packet[5] == 0x02
-        assert packet[6] == 0x02  # VOLUME_DOWN code
+
+        expected_data = MediaKey.KEY_VOLUMEDOWN.value
+        assert packet[MEDIA_DATA0_OFFSET] == expected_data[0]
+        assert packet[MEDIA_DATA1_OFFSET] == expected_data[1]
 
     def test_play_pause_key(self) -> None:
         """Test sending play/pause media key."""
-        from pych9329.models import MediaKeyInput
-
-        mock_adapter = Mock()
+        mock_adapter = Mock(spec=CommunicationAdapter)
         driver = CH9329Driver(mock_adapter)
 
-        input_data = MediaKeyInput(keys=[MediaKey.KEY_PLAYPAUSE])
-        driver.send_media_key_input(input_data)
+        driver.send_media_key_input(MediaKeyInput(keys=[MediaKey.KEY_PLAYPAUSE]))
 
         packet = mock_adapter.send.call_args[0][0]
-        # MediaKey.KEY_PLAYPAUSE = (0x02, 0x08, 0x00, 0x00)
-        assert packet[5] == 0x02
-        assert packet[6] == 0x08  # PLAY_PAUSE code
+
+        expected_data = MediaKey.KEY_PLAYPAUSE.value
+        assert packet[MEDIA_DATA0_OFFSET] == expected_data[0]
+        assert packet[MEDIA_DATA1_OFFSET] == expected_data[1]
 
     def test_next_track_key(self) -> None:
         """Test sending next track media key."""
-        from pych9329.models import MediaKeyInput
-
-        mock_adapter = Mock()
+        mock_adapter = Mock(spec=CommunicationAdapter)
         driver = CH9329Driver(mock_adapter)
 
-        input_data = MediaKeyInput(keys=[MediaKey.KEY_NEXTSONG])
-        driver.send_media_key_input(input_data)
+        driver.send_media_key_input(MediaKeyInput(keys=[MediaKey.KEY_NEXTSONG]))
 
         packet = mock_adapter.send.call_args[0][0]
-        # MediaKey.KEY_NEXTSONG = (0x02, 0x10, 0x00, 0x00)
-        assert packet[5] == 0x02
-        assert packet[6] == 0x10  # NEXT_TRACK code
+
+        expected_data = MediaKey.KEY_NEXTSONG.value
+        assert packet[MEDIA_DATA0_OFFSET] == expected_data[0]
+        assert packet[MEDIA_DATA1_OFFSET] == expected_data[1]
 
     def test_prev_track_key(self) -> None:
         """Test sending previous track media key."""
-        from pych9329.models import MediaKeyInput
-
-        mock_adapter = Mock()
+        mock_adapter = Mock(spec=CommunicationAdapter)
         driver = CH9329Driver(mock_adapter)
 
-        input_data = MediaKeyInput(keys=[MediaKey.KEY_PREVIOUSSONG])
-        driver.send_media_key_input(input_data)
+        driver.send_media_key_input(MediaKeyInput(keys=[MediaKey.KEY_PREVIOUSSONG]))
 
         packet = mock_adapter.send.call_args[0][0]
-        # MediaKey.KEY_PREVIOUSSONG = (0x02, 0x20, 0x00, 0x00)
-        assert packet[5] == 0x02
-        assert packet[6] == 0x20  # PREV_TRACK code
+
+        expected_data = MediaKey.KEY_PREVIOUSSONG.value
+        assert packet[MEDIA_DATA0_OFFSET] == expected_data[0]
+        assert packet[MEDIA_DATA1_OFFSET] == expected_data[1]

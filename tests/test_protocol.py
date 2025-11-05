@@ -11,13 +11,6 @@ class TestKeyboardPackets:
         # Press 'A' key (keycode 0x04) with shift (modifier 0x02)
         packet = CH9329Protocol.build_keyboard_press_packet(0x02, 0x04)
 
-        # Expected packet structure:
-        # Header: 0x57, 0xAB
-        # Address: 0x00
-        # Command: 0x02
-        # Length: 0x08
-        # Data: modifier, 0x00, keycode, 0x00, 0x00, 0x00, 0x00, 0x00
-        # Checksum
         expected = bytes(
             [
                 0x57,
@@ -97,13 +90,6 @@ class TestMouseAbsolutePackets:
         # Move to (0, 0) with no button pressed
         packet = CH9329Protocol.build_mouse_abs_packet(0x00, 0, 0)
 
-        # Expected packet structure:
-        # Header: 0x57, 0xAB
-        # Address: 0x00
-        # Command: 0x04
-        # Length: 0x07
-        # Data: 0x02, button, x_low, x_high, y_low, y_high, 0x00
-        # Checksum
         expected = bytes(
             [
                 0x57,
@@ -180,13 +166,6 @@ class TestMouseRelativePackets:
         """Test building a mouse relative move packet with no movement."""
         packet = CH9329Protocol.build_mouse_rel_packet(0x00, 0, 0, 0)
 
-        # Expected packet structure:
-        # Header: 0x57, 0xAB
-        # Address: 0x00
-        # Command: 0x05
-        # Length: 0x05
-        # Data: 0x01, button, x, y, scroll
-        # Checksum
         expected = bytes(
             [
                 0x57,
@@ -322,13 +301,6 @@ class TestMediaPackets:
         """Test building a media key press packet for mute."""
         packet = CH9329Protocol.build_media_press_packet(0x02, 0x04, 0x00, 0x00)
 
-        # Expected packet structure:
-        # Header: 0x57, 0xAB
-        # Address: 0x00
-        # Command: 0x03
-        # Length: 0x04
-        # Data: 0x02, 0x04, 0x00, 0x00
-        # Checksum
         expected = bytes(
             [
                 0x57,
@@ -387,6 +359,12 @@ class TestMediaPackets:
         assert packet == expected
 
 
+KEYBOARD_PACKET_LENGTH = 14
+MOUSE_ABS_PACKET_LENGTH = 13
+MOUSE_REL_PACKET_LENGTH = 11
+MEDIA_PACKET_LENGTH = 10
+
+
 class TestPacketValidation:
     """Tests for packet validation."""
 
@@ -394,26 +372,26 @@ class TestPacketValidation:
         """Test that keyboard packets have correct length."""
         packet = CH9329Protocol.build_keyboard_press_packet(0x00, 0x04)
         assert (
-            len(packet) == 14
+            len(packet) == KEYBOARD_PACKET_LENGTH
         )  # Header(2) + Addr(1) + Cmd(1) + Len(1) + Data(8) + Checksum(1)
 
     def test_mouse_abs_packet_length(self) -> None:
         """Test that mouse absolute packets have correct length."""
         packet = CH9329Protocol.build_mouse_abs_packet(0x00, 0, 0)
         assert (
-            len(packet) == 13
+            len(packet) == MOUSE_ABS_PACKET_LENGTH
         )  # Header(2) + Addr(1) + Cmd(1) + Len(1) + Data(7) + Checksum(1)
 
     def test_mouse_rel_packet_length(self) -> None:
         """Test that mouse relative packets have correct length."""
         packet = CH9329Protocol.build_mouse_rel_packet(0x00, 0, 0, 0)
         assert (
-            len(packet) == 11
+            len(packet) == MOUSE_REL_PACKET_LENGTH
         )  # Header(2) + Addr(1) + Cmd(1) + Len(1) + Data(5) + Checksum(1)
 
     def test_media_packet_length(self) -> None:
         """Test that media packets have correct length."""
         packet = CH9329Protocol.build_media_press_packet(0x02, 0x04, 0x00, 0x00)
         assert (
-            len(packet) == 10
+            len(packet) == MEDIA_PACKET_LENGTH
         )  # Header(2) + Addr(1) + Cmd(1) + Len(1) + Data(4) + Checksum(1)

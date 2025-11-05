@@ -97,9 +97,16 @@ def test_mouse_movement_events(
         # Move left and up
         driver.send_mouse_input(pych9329.MouseInput(x=-10, y=-10))
 
-    # Movement events should be captured as REL_X and REL_Y
-    # Note: We expect 4 events: REL_X (10), REL_Y (10), REL_X (-10), REL_Y (-10)
-    assert len(capture_session.events) == 4
+    expected_codes_and_values = [
+        ("REL_X", 10),
+        ("REL_Y", 10),
+        ("REL_X", -10),
+        ("REL_Y", -10),
+    ]
+    actual_codes_and_values = [
+        (event.code_name, event.value) for event in capture_session.events
+    ]
+    assert actual_codes_and_values == expected_codes_and_values
 
 
 def test_mouse_scroll_events(

@@ -59,10 +59,6 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 "tests/**/*.py" = [
     "S101",    # assert-used (pytest uses asserts)
-    "ERA001",  # commented-out code (test documentation)
-    "PLR2004", # magic-value-comparison (test assertions)
-    "E501",    # line-too-long (test comments)
-    "PLC0415", # import-outside-toplevel (test organization)
 ]
 
 [tool.ruff.lint.pydocstyle]

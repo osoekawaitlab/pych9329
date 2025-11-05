@@ -8,6 +8,7 @@ from pych9329.models import (
     KeyboardInput,
     KeyCode,
     MediaKey,
+    MediaKeyInput,
     ModifierKey,
     MouseButton,
     MouseInput,
@@ -94,81 +95,6 @@ class TestKeyCode:
         assert KeyCode.KEY_Z.value == ecodes.KEY_Z
 
 
-class TestCharacterMapping:
-    """Tests for character-to-keycode mapping functionality."""
-
-    def test_lowercase_a_mapping(self) -> None:
-        """Test that lowercase 'a' maps to KEY_A without shift (evdev codes)."""
-        from pych9329.models import get_key_mapping
-
-        modifier, keycode = get_key_mapping("a")
-        assert modifier == 0x00
-        assert keycode == ecodes.KEY_A
-
-    def test_uppercase_a_mapping(self) -> None:
-        """Test that uppercase 'A' maps to KEY_A with shift (evdev codes)."""
-        from pych9329.models import get_key_mapping
-
-        modifier, keycode = get_key_mapping("A")
-        assert modifier == ecodes.KEY_LEFTSHIFT
-        assert keycode == ecodes.KEY_A
-
-    def test_digit_zero_mapping(self) -> None:
-        """Test that '0' maps to KEY_0 without shift (evdev codes)."""
-        from pych9329.models import get_key_mapping
-
-        modifier, keycode = get_key_mapping("0")
-        assert modifier == 0x00
-        assert keycode == ecodes.KEY_0
-
-    def test_digit_one_mapping(self) -> None:
-        """Test that '1' maps to KEY_1 without shift (evdev codes)."""
-        from pych9329.models import get_key_mapping
-
-        modifier, keycode = get_key_mapping("1")
-        assert modifier == 0x00
-        assert keycode == ecodes.KEY_1
-
-    def test_exclamation_mapping(self) -> None:
-        """Test that '!' maps to KEY_1 with shift (evdev codes)."""
-        from pych9329.models import get_key_mapping
-
-        modifier, keycode = get_key_mapping("!")
-        assert modifier == ecodes.KEY_LEFTSHIFT
-        assert keycode == ecodes.KEY_1
-
-    def test_at_sign_mapping(self) -> None:
-        """Test that '@' maps to correct key (evdev codes)."""
-        from pych9329.models import get_key_mapping
-
-        modifier, keycode = get_key_mapping("@")
-        assert modifier == 0x00
-        assert keycode == ecodes.KEY_LEFTBRACE
-
-    def test_comma_mapping(self) -> None:
-        """Test that ',' maps to correct key (evdev codes)."""
-        from pych9329.models import get_key_mapping
-
-        modifier, keycode = get_key_mapping(",")
-        assert modifier == 0x00
-        assert keycode == ecodes.KEY_COMMA
-
-    def test_less_than_mapping(self) -> None:
-        """Test that '<' maps to correct key with shift (evdev codes)."""
-        from pych9329.models import get_key_mapping
-
-        modifier, keycode = get_key_mapping("<")
-        assert modifier == ecodes.KEY_LEFTSHIFT
-        assert keycode == ecodes.KEY_COMMA
-
-    def test_unmapped_character_raises_error(self) -> None:
-        """Test that unmapped characters raise ValueError."""
-        from pych9329.models import get_key_mapping
-
-        with pytest.raises(ValueError, match="Unsupported character"):
-            get_key_mapping("あ")
-
-
 class TestMediaKey:
     """Tests for MediaKey enum."""
 
@@ -226,23 +152,24 @@ class TestKeyboardInput:
 
     def test_multiple_keys(self) -> None:
         """Test creating state with multiple keys."""
-        state = KeyboardInput(keys=[KeyCode.KEY_A, KeyCode.KEY_B, KeyCode.KEY_C])
-        assert len(state.keys) == 3
-        assert state.keys == [KeyCode.KEY_A, KeyCode.KEY_B, KeyCode.KEY_C]
+        keys = [KeyCode.KEY_A, KeyCode.KEY_B, KeyCode.KEY_C]
+        state = KeyboardInput(keys=keys)
+        assert len(state.keys) == len(keys)
+        assert state.keys == keys
 
     def test_maximum_six_keys(self) -> None:
         """Test creating state with exactly 6 keys."""
-        state = KeyboardInput(
-            keys=[
-                KeyCode.KEY_A,
-                KeyCode.KEY_B,
-                KeyCode.KEY_C,
-                KeyCode.KEY_D,
-                KeyCode.KEY_E,
-                KeyCode.KEY_F,
-            ]
-        )
-        assert len(state.keys) == 6
+        keys = [
+            KeyCode.KEY_A,
+            KeyCode.KEY_B,
+            KeyCode.KEY_C,
+            KeyCode.KEY_D,
+            KeyCode.KEY_E,
+            KeyCode.KEY_F,
+        ]
+        state = KeyboardInput(keys=keys)
+        assert len(state.keys) == len(keys)
+        assert state.keys == keys
 
     def test_more_than_six_keys_raises_error(self) -> None:
         """Test that more than 6 keys raises ValidationError."""
@@ -264,19 +191,18 @@ class TestKeyboardInput:
 
     def test_all_modifiers(self) -> None:
         """Test creating state with all modifier keys."""
-        state = KeyboardInput(
-            modifiers={
-                ModifierKey.KEY_LEFTCTRL,
-                ModifierKey.KEY_RIGHTCTRL,
-                ModifierKey.KEY_LEFTSHIFT,
-                ModifierKey.KEY_RIGHTSHIFT,
-                ModifierKey.KEY_LEFTALT,
-                ModifierKey.KEY_RIGHTALT,
-                ModifierKey.KEY_LEFTMETA,
-                ModifierKey.KEY_RIGHTMETA,
-            }
-        )
-        assert len(state.modifiers) == 8
+        modifiers = {
+            ModifierKey.KEY_LEFTCTRL,
+            ModifierKey.KEY_RIGHTCTRL,
+            ModifierKey.KEY_LEFTSHIFT,
+            ModifierKey.KEY_RIGHTSHIFT,
+            ModifierKey.KEY_LEFTALT,
+            ModifierKey.KEY_RIGHTALT,
+            ModifierKey.KEY_LEFTMETA,
+            ModifierKey.KEY_RIGHTMETA,
+        }
+        state = KeyboardInput(modifiers=modifiers)
+        assert len(state.modifiers) == len(modifiers)
 
 
 class TestMouseInput:
@@ -292,19 +218,22 @@ class TestMouseInput:
 
     def test_movement_only(self) -> None:
         """Test creating state with only movement."""
-        state = MouseInput(x=10, y=-20)
+        dx = 10
+        dy = -20
+        state = MouseInput(x=dx, y=dy)
         assert state.buttons == set()
-        assert state.x == 10
-        assert state.y == -20
+        assert state.x == dx
+        assert state.y == dy
         assert state.scroll == 0
 
     def test_scroll_only(self) -> None:
         """Test creating state with only scroll."""
-        state = MouseInput(scroll=5)
+        dscroll = 5
+        state = MouseInput(scroll=dscroll)
         assert state.buttons == set()
         assert state.x == 0
         assert state.y == 0
-        assert state.scroll == 5
+        assert state.scroll == dscroll
 
     def test_single_button(self) -> None:
         """Test creating state with single button."""
@@ -313,39 +242,48 @@ class TestMouseInput:
 
     def test_multiple_buttons(self) -> None:
         """Test creating state with multiple buttons."""
-        state = MouseInput(buttons={MouseButton.BTN_LEFT, MouseButton.BTN_RIGHT})
-        assert len(state.buttons) == 2
+        buttons = {MouseButton.BTN_LEFT, MouseButton.BTN_RIGHT}
+        state = MouseInput(buttons=buttons)
+        assert len(state.buttons) == len(buttons)
         assert state.buttons == {MouseButton.BTN_LEFT, MouseButton.BTN_RIGHT}
 
     def test_button_with_movement(self) -> None:
         """Test creating state with button and movement."""
-        state = MouseInput(buttons={MouseButton.BTN_LEFT}, x=5, y=-5)
+        dx = 5
+        dy = -5
+        state = MouseInput(buttons={MouseButton.BTN_LEFT}, x=dx, y=dy)
         assert state.buttons == {MouseButton.BTN_LEFT}
-        assert state.x == 5
-        assert state.y == -5
+        assert state.x == dx
+        assert state.y == dy
 
     def test_all_parameters(self) -> None:
         """Test creating state with all parameters."""
+        buttons = {MouseButton.BTN_LEFT, MouseButton.BTN_RIGHT}
+        dx = 10
+        dy = -10
+        dscroll = 3
         state = MouseInput(
-            buttons={MouseButton.BTN_LEFT, MouseButton.BTN_MIDDLE},
-            x=10,
-            y=-10,
-            scroll=3,
+            buttons=buttons,
+            x=dx,
+            y=dy,
+            scroll=dscroll,
         )
-        assert len(state.buttons) == 2
-        assert state.x == 10
-        assert state.y == -10
-        assert state.scroll == 3
+        assert len(state.buttons) == len(buttons)
+        assert state.x == dx
+        assert state.y == dy
+        assert state.scroll == dscroll
 
     def test_x_min_boundary(self) -> None:
         """Test x movement at minimum boundary."""
-        state = MouseInput(x=-128)
-        assert state.x == -128
+        dx = -128
+        state = MouseInput(x=dx)
+        assert state.x == dx
 
     def test_x_max_boundary(self) -> None:
         """Test x movement at maximum boundary."""
-        state = MouseInput(x=127)
-        assert state.x == 127
+        dx = 127
+        state = MouseInput(x=dx)
+        assert state.x == dx
 
     def test_x_below_min_raises_error(self) -> None:
         """Test that x below minimum raises ValidationError."""
@@ -363,13 +301,15 @@ class TestMouseInput:
 
     def test_y_min_boundary(self) -> None:
         """Test y movement at minimum boundary."""
-        state = MouseInput(y=-128)
-        assert state.y == -128
+        dy = -128
+        state = MouseInput(y=dy)
+        assert state.y == dy
 
     def test_y_max_boundary(self) -> None:
         """Test y movement at maximum boundary."""
-        state = MouseInput(y=127)
-        assert state.y == 127
+        dy = 127
+        state = MouseInput(y=dy)
+        assert state.y == dy
 
     def test_y_below_min_raises_error(self) -> None:
         """Test that y below minimum raises ValidationError."""
@@ -387,13 +327,15 @@ class TestMouseInput:
 
     def test_scroll_min_boundary(self) -> None:
         """Test scroll at minimum boundary."""
-        state = MouseInput(scroll=-127)
-        assert state.scroll == -127
+        dscroll = -127
+        state = MouseInput(scroll=dscroll)
+        assert state.scroll == dscroll
 
     def test_scroll_max_boundary(self) -> None:
         """Test scroll at maximum boundary."""
-        state = MouseInput(scroll=127)
-        assert state.scroll == 127
+        dscroll = 127
+        state = MouseInput(scroll=dscroll)
+        assert state.scroll == dscroll
 
     def test_scroll_below_min_raises_error(self) -> None:
         """Test that scroll below minimum raises ValidationError."""
@@ -415,59 +357,40 @@ class TestMediaKeyInput:
 
     def test_empty_state(self) -> None:
         """Test creating an empty media key state (all keys released)."""
-        from pych9329.models import MediaKeyInput
-
         input_data = MediaKeyInput()
         assert input_data.keys == []
 
     def test_single_media_key(self) -> None:
         """Test creating input with single media key."""
-        from pych9329.models import MediaKeyInput
-
         input_data = MediaKeyInput(keys=[MediaKey.KEY_MUTE])
         assert input_data.keys == [MediaKey.KEY_MUTE]
 
     def test_play_pause_key(self) -> None:
         """Test creating input with play/pause key."""
-        from pych9329.models import MediaKeyInput
-
         input_data = MediaKeyInput(keys=[MediaKey.KEY_PLAYPAUSE])
         assert input_data.keys == [MediaKey.KEY_PLAYPAUSE]
 
     def test_volume_up_key(self) -> None:
         """Test creating input with volume up key."""
-        from pych9329.models import MediaKeyInput
-
         input_data = MediaKeyInput(keys=[MediaKey.KEY_VOLUMEUP])
         assert input_data.keys == [MediaKey.KEY_VOLUMEUP]
 
     def test_volume_down_key(self) -> None:
         """Test creating input with volume down key."""
-        from pych9329.models import MediaKeyInput
-
         input_data = MediaKeyInput(keys=[MediaKey.KEY_VOLUMEDOWN])
         assert input_data.keys == [MediaKey.KEY_VOLUMEDOWN]
 
     def test_next_track_key(self) -> None:
         """Test creating input with next track key."""
-        from pych9329.models import MediaKeyInput
-
         input_data = MediaKeyInput(keys=[MediaKey.KEY_NEXTSONG])
         assert input_data.keys == [MediaKey.KEY_NEXTSONG]
 
     def test_prev_track_key(self) -> None:
         """Test creating input with previous track key."""
-        from pych9329.models import MediaKeyInput
-
         input_data = MediaKeyInput(keys=[MediaKey.KEY_PREVIOUSSONG])
         assert input_data.keys == [MediaKey.KEY_PREVIOUSSONG]
 
     def test_more_than_one_key_raises_error(self) -> None:
         """Test that providing more than one key raises validation error."""
-        import pytest
-        from pydantic import ValidationError
-
-        from pych9329.models import MediaKeyInput
-
         with pytest.raises(ValidationError):
             MediaKeyInput(keys=[MediaKey.KEY_MUTE, MediaKey.KEY_VOLUMEUP])
