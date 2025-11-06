@@ -39,6 +39,13 @@ theme:
 nav:
   - Home: index.md
   - Installation: installation.md
+  - Architecture Decisions:
+    - Summary: adr.md
+    - Details:
+      - Template: adr/0000-adr-template.md
+      - State-Based API Design: adr/0001-state-based-api-design.md
+      - Adopt Pydantic for Data Models: adr/0002-adopt-pydantic-for-data-models.md
+      - Adopt evdev as Domain Model: adr/0003-adopt-evdev-as-domain-model.md
   - API Reference:
     - Overview: api/index.md
     - Driver: api/driver.md
