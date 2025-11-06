@@ -38,6 +38,13 @@ theme:
 
 nav:
   - Home: index.md
+  - Installation: installation.md
+  - API Reference:
+    - Overview: api/index.md
+    - Driver: api/driver.md
+    - Adapter: api/adapter.md
+    - Models: api/models.md
+    - Protocol: api/protocol.md
 
 plugins:
   - search:
