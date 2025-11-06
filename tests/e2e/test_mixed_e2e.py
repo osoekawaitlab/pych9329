@@ -3,6 +3,8 @@
 import ch9329py
 from e2e_utils import InputCaptureSessionManager
 
+KEY_REPEAT_VALUE = 2
+
 
 def test_keyboard_and_media_key_events(
     input_capture_session_manager: InputCaptureSessionManager,
@@ -47,11 +49,13 @@ def test_keyboard_and_media_key_events(
         ("KEY_VOLUMEUP", 0),
         ("KEY_VOLUMEDOWN", 1),
         ("KEY_VOLUMEDOWN", 0),
-        ("KEY_Z", 0),
         ("KEY_LEFTSHIFT", 0),
+        ("KEY_Z", 0),
     ]
     actual_codes_and_values = [
-        (event.code_name, event.value) for event in capture_session.events
+        (event.code_name, event.value)
+        for event in capture_session.events
+        if event.value != KEY_REPEAT_VALUE
     ]
     assert actual_codes_and_values == expected_codes_and_values
 
@@ -106,6 +110,8 @@ def test_shift_left_drag_mouse(
         ("KEY_LEFTSHIFT", 0),
     ]
     actual_codes_and_values = [
-        (event.code_name, event.value) for event in capture_session.events
+        (event.code_name, event.value)
+        for event in capture_session.events
+        if event.value != KEY_REPEAT_VALUE
     ]
     assert actual_codes_and_values == expected_codes_and_values
